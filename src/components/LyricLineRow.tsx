@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import type { EditableLyricLine } from '@/types/lyrics';
@@ -24,15 +25,26 @@ export function LyricLineRow({
   onMoveDown: () => void;
   onDelete: () => void;
 }) {
+  const [timestampText, setTimestampText] = useState(formatEditorTimestamp(line.startMs));
+
+  useEffect(() => {
+    setTimestampText(formatEditorTimestamp(line.startMs));
+  }, [line.startMs]);
+
   return (
     <View style={[styles.container, active && styles.active]}>
       <Text style={styles.sequence}>{line.sequence}</Text>
       <TextInput
         style={styles.timestamp}
-        defaultValue={formatEditorTimestamp(line.startMs)}
+        value={timestampText}
         placeholder="00:00.000"
         placeholderTextColor={COLORS.muted}
-        onEndEditing={(event) => onChange({ ...line, startMs: parseEditorTimestamp(event.nativeEvent.text) })}
+        onChangeText={setTimestampText}
+        onEndEditing={() => {
+          const parsed = parseEditorTimestamp(timestampText);
+          onChange({ ...line, startMs: parsed });
+          setTimestampText(formatEditorTimestamp(parsed));
+        }}
       />
       <Pressable style={styles.mark} onPress={onMark}>
         <Text style={styles.markText}>Mark</Text>
@@ -61,6 +73,7 @@ export function LyricLineRow({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: SPACING.sm,
     padding: SPACING.sm,
@@ -85,6 +98,7 @@ const styles = StyleSheet.create({
   markText: { color: COLORS.black, fontWeight: '800' },
   lyric: {
     flex: 1,
+    minWidth: 220,
     minHeight: 38,
     color: COLORS.white,
     fontFamily: TYPOGRAPHY.body,
