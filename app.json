@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "CHC Artists",
+    "slug": "chc-artists",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
