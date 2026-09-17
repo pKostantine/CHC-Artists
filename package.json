@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "build": "expo export -p web",
     "deploy": "npm run build && wrangler deploy",
+    "deploy:pages": "npm run build && wrangler pages deploy dist --project-name chc-artists",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
