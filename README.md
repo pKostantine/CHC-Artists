@@ -44,26 +44,19 @@ Use an authenticated CHC account with creator or admin access.
 
 ## Deploy
 
-The site is a static Expo web export. Cloudflare can serve it two ways, and
-they are different products on different hostnames -- pick one:
+The site is a static Expo web export served by the `chc-artists` Worker
+(`wrangler.jsonc`), alongside `chc-upload-authorizer` and `chc-media-resolver`.
+The asset config uses the single-page fallback, so a path with no file behind
+it serves the app rather than 404ing.
 
 ```bash
-npm run build         # expo export -p web  ->  dist/
-
-npm run deploy        # Worker  ->  https://chc-artists.<account>.workers.dev
-npm run deploy:pages  # Pages   ->  https://chc-artists.pages.dev
+npm run build     # expo export -p web  ->  dist/
+npm run deploy    # builds, then wrangler deploy
 ```
 
-`npm run deploy` publishes to the **Worker** named `chc-artists`, configured in
-`wrangler.jsonc` as a static-asset Worker with the single-page fallback, so any
-path serves the app rather than 404ing. That Worker already exists in the CHC
-account, alongside `chc-upload-authorizer` and `chc-media-resolver`, which is
-why it is the default here.
-
-`npm run deploy:pages` publishes the same `dist/` to a Cloudflare **Pages**
-project instead, creating it on first run. A `pages.dev` address only answers
-once a Pages project of that name has a deployment -- a Worker never serves
-`pages.dev`, whatever it is named.
+The deployed address is `https://chc-artists.<account>.workers.dev`. A Worker
+never answers on `pages.dev`, whatever it is named -- that is Cloudflare's
+separate Pages product, and nothing is published there.
 
 Deploying from Cloudflare's Git integration instead: build command
 `npm run build`, output directory `dist`.
