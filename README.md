@@ -1,92 +1,343 @@
 # CHC Artists
 
-Creator and management companion application for the Coptic Hymns Centre ecosystem. This is the separate CHC Artists application and shares the existing CHC Supabase, Cloudflare/R2 media pipeline, and backend contracts.
+**CHC Artists** is the artist and creator portal for the **Coptic Hymns Centre (CHC)** platform.
 
-## Phase 15 Creator Application
+It is designed for cantors, choirs, hymn groups, musicians, and other approved creators who publish audio through CHC. The app gives artists a dedicated place to manage their presence on the platform, submit releases, monitor their content, and eventually manage analytics and monetization.
 
-Implemented creator-facing workflows:
+The concept is similar to platforms such as **Spotify for Artists** and **Apple Music for Artists**, but built specifically for the CHC ecosystem and the needs of Coptic Orthodox audio content.
 
-- Supabase authentication and persisted web sessions
-- creator-account dashboard and account switching
-- Music and Learn & Study submission status tracking
-- requested-changes notes, processing, review, and publication states
-- artist and cantor creation/management entry points
-- Music release creation for Single / EP / Album
-- Learning Album and Lesson Set creation
-- cantor, season, and hymn selection
-- English, Arabic, Coptic, and French metadata editing
-- artwork and large media selection
-- secure upload through the CHC upload-authorizer Worker into private `chc-submissions` R2 storage
-- live upload progress
-- track/lesson ordering controls
-- submission preview and submission to the existing 48-hour moderation workflow
-- existing synchronized Lyrics Studio retained as a first-class creator tool
+---
 
-The app never requires creators to manually edit Supabase records or handle R2 credentials.
+## About the App
 
-## Environment
+CHC Artists is separate from the main CHC listener experience.
 
-No local environment file is required to run the normal CHC Artists app. The live CHC Supabase URL, Supabase publishable key, media resolver URL, and upload-authorizer URL are public client configuration and have safe built-in defaults.
+The main **CHC app** is where users discover and listen to hymns, songs, liturgical recordings, albums, playlists, and other audio.
 
-If you need to point a local build at different public services, copy the example and override whichever values you need:
+**CHC Artists** is the management side of that ecosystem.
 
-```bash
-cp .env.example .env.local
-```
+Artists can use it to:
 
-Supported overrides:
+- Create and manage an artist account
+- Sign in using supported authentication methods, including Google
+- Manage their artist profile
+- Submit tracks, albums, and other releases
+- Upload audio and artwork
+- Track the status of submitted releases
+- Manage published content
+- View performance and audience information
+- Access future artist monetization tools
 
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY` (legacy compatibility)
-- `EXPO_PUBLIC_CHC_MEDIA_BASE_URL`
-- `EXPO_PUBLIC_CHC_UPLOAD_URL`
+The goal is to give creators a professional publishing experience while keeping all content integrated with the wider CHC platform.
 
-Never place a Supabase secret key or `service_role` key in an `EXPO_PUBLIC_*` variable or in client source.
+---
 
-## Run
+## Who It Is For
 
-Install dependencies once:
+CHC Artists is intended for creators who contribute audio to Coptic Hymns Centre, including:
 
-```bash
-npm install
-```
+- Cantors
+- Choirs
+- Coptic hymn groups
+- Liturgical recording groups
+- Christian singers
+- Musicians
+- Churches and ministries
+- Other approved audio publishers
 
-For Expo Go on iOS or Android:
+Not every CHC user needs a CHC Artists account. The app is specifically for people or organizations that publish and manage content.
 
-```bash
-npx expo start
-```
+---
 
-If Metro has stale state after dependency or config changes:
+## Core Features
 
-```bash
-npx expo start -c
-```
+### Artist Accounts
 
-For the web app:
+Artists can create an account and access their own creator dashboard.
 
-```bash
-npm run web
-```
+Authentication is powered through the CHC backend and supports standard account creation as well as supported third-party sign-in methods such as Google.
 
-Use an authenticated CHC account with creator or admin access.
+---
 
-## Deploy
+### Artist Profiles
 
-The site is a static Expo web export served by the `chc-artists` Worker (`wrangler.jsonc`), alongside `chc-upload-authorizer` and `chc-media-resolver`. The asset config uses the single-page fallback, so a path with no file behind it serves the app rather than 404ing.
+Each artist can have a dedicated profile containing information such as:
 
-```bash
-npm run build     # expo export -p web  ->  dist/
-npm run deploy    # builds, then wrangler deploy
-```
+- Artist name
+- Profile image
+- Biography
+- Artist type
+- Social or external links
+- Published releases
+- Associated tracks and albums
 
-The deployed address is `https://chc-artists.<account>.workers.dev`. A Worker never answers on `pages.dev`, whatever it is named -- that is Cloudflare's separate Pages product, and nothing is published there.
+Artist profiles are designed to connect directly with the artist pages shown inside the main CHC app.
 
-Deploying from Cloudflare's Git integration instead: build command `npm run build`, output directory `dist`.
+---
 
-### Build-time overrides
+### Release Submissions
 
-Expo compiles `EXPO_PUBLIC_*` variables into the bundle. They are optional for the normal production CHC services because the app contains public defaults, but Cloudflare build variables can still override them when intentionally targeting a different project or endpoint.
+Artists can prepare and submit content for publication on CHC.
 
-The Supabase client uses a publishable key, not a secret key. Authorization remains enforced by Supabase Auth and Row Level Security.
+A submission may include:
+
+- Track title
+- Artist information
+- Album or release information
+- Audio file
+- Cover artwork
+- Hymn or song metadata
+- Language
+- Release date
+- Credits
+- Additional publishing information
+
+Uploaded files are processed before the submission is finalized.
+
+The submission system is designed so that artists can clearly see the upload and processing state of every file before submitting a release.
+
+---
+
+### Submission Review
+
+Content submitted through CHC Artists can go through a review process before becoming publicly available.
+
+Possible submission states may include:
+
+- Draft
+- Uploading
+- Processing
+- Submitted
+- Under Review
+- Approved
+- Rejected
+- Published
+
+This allows CHC to maintain consistent metadata, audio quality, artwork quality, and content standards across the platform.
+
+---
+
+### Content Management
+
+After publication, artists can manage the releases connected to their account.
+
+Depending on the release and account permissions, this may include:
+
+- Viewing published tracks
+- Viewing albums and releases
+- Updating selected metadata
+- Managing artwork
+- Reviewing release status
+- Requesting changes
+- Managing future releases
+
+---
+
+### Artist Analytics
+
+CHC Artists is intended to provide artists with information about how their content performs across the CHC platform.
+
+Analytics can include information such as:
+
+- Total plays
+- Unique listeners
+- Popular tracks
+- Popular releases
+- Listening trends
+- Audience growth
+- Geographic or platform-level statistics where appropriate
+
+The objective is to help artists understand how their recordings are being discovered and used without requiring access to CHC's internal administrative systems.
+
+---
+
+### Monetization
+
+CHC Artists is being designed with future monetization support in mind.
+
+This may eventually allow eligible artists to:
+
+- Enable monetization for approved content
+- View monetized plays
+- Review estimated earnings
+- View revenue history
+- Manage payout information
+- Access statements and reporting
+
+Any monetization system will require its own eligibility, legal, advertising, payment, and rights-management processes before being made generally available.
+
+---
+
+## Relationship to CHC
+
+CHC Artists is part of the larger **Coptic Hymns Centre** application ecosystem.
+
+The apps should feel related without being identical.
+
+The main CHC app is focused on **discovering, reading, listening, and worship resources**.
+
+CHC Artists is focused on **publishing, managing, and understanding audio content**.
+
+The visual language, navigation patterns, typography, spacing, and general design philosophy should make CHC Artists recognizable as part of the same family while still giving it the structure expected from a professional creator dashboard.
+
+---
+
+## Platform Architecture
+
+CHC Artists is built around the same broader infrastructure used by the CHC ecosystem.
+
+### Frontend
+
+The application is built with **React Native / Expo**, allowing the project to support multiple platforms from a shared codebase.
+
+The interface is designed to work across:
+
+- iOS
+- iPadOS
+- Android
+- Web
+
+Platform-specific improvements can be introduced where necessary while keeping the core experience consistent.
+
+### Supabase
+
+**Supabase** provides backend services used by the application, including areas such as:
+
+- Authentication
+- User accounts
+- Artist records
+- Release metadata
+- Submission data
+- Database access
+- Permissions and authorization
+
+### Cloudflare
+
+**Cloudflare** is used as part of the media and infrastructure layer for CHC.
+
+Its role can include services related to:
+
+- Audio delivery
+- Media storage
+- Upload infrastructure
+- CDN delivery
+- Streaming
+- Processing
+- Edge services
+
+This keeps large media files separate from the application's primary relational database while allowing CHC to deliver content efficiently.
+
+---
+
+## Typical Artist Workflow
+
+A typical release workflow looks like this:
+
+1. **Create or sign in to a CHC Artists account**
+2. **Create or claim an artist profile**
+3. **Start a new submission**
+4. **Enter the release metadata**
+5. **Upload audio and artwork**
+6. **Wait for all files to finish uploading and processing**
+7. **Submit the release for review**
+8. **CHC reviews the submission**
+9. **Approved content is published to the CHC platform**
+10. **The artist can monitor and manage the release from CHC Artists**
+
+---
+
+## Design Goals
+
+CHC Artists is being developed around several core principles.
+
+### Simple
+
+Publishing a track should not require understanding CHC's internal database structure.
+
+The artist should only need to provide the information necessary for the release.
+
+### Professional
+
+The app should feel like a real artist platform rather than an administrative form.
+
+Upload progress, release status, artwork, metadata, and analytics should all be presented clearly.
+
+### Integrated
+
+Artists should not have to manage separate disconnected systems for CHC.
+
+Their account, profile, releases, media, analytics, and future monetization tools should all be accessible through the same application.
+
+### Consistent With CHC
+
+CHC Artists should visually belong to the CHC family while still having its own identity and workflow.
+
+### Built for Growth
+
+The platform should be able to grow from basic release submissions into a more complete artist platform with analytics, monetization, collaboration, rights management, and other creator tools.
+
+---
+
+## Current Development Areas
+
+Development is currently focused on building the core artist platform, including:
+
+- Authentication and account creation
+- Google sign-in
+- Artist onboarding
+- Artist profiles
+- Release creation
+- Audio uploads
+- Artwork uploads
+- Upload progress and processing
+- Submission validation
+- Submission review workflows
+- CHC backend integration
+- Cloudflare media integration
+- Cross-platform Expo support
+
+Additional creator tools will continue to be added as the CHC audio platform expands.
+
+---
+
+## Future Possibilities
+
+Potential future additions include:
+
+- Advanced artist analytics
+- Revenue dashboards
+- Audio advertising
+- Artist monetization
+- Payout management
+- Release scheduling
+- Team and manager access
+- Multiple artists under one account
+- Collaboration credits
+- Lyrics and hymn text management
+- Copyright and rights information
+- Content ownership tools
+- Notifications
+- Artist verification
+- Release editing and takedown requests
+- Promotional tools
+- Featured release management
+
+These features are part of the broader direction of CHC Artists and may be implemented gradually.
+
+---
+
+## CHC Ecosystem
+
+CHC Artists is one part of the broader Coptic Hymns Centre project.
+
+The long-term goal of CHC is to provide a unified digital platform for Coptic Orthodox resources while giving the people who create, preserve, record, and publish those resources the tools they need to manage their work properly.
+
+**CHC Artists provides the creator side of that platform.**
+
+---
+
+## Status
+
+CHC Artists is currently under active development.
+
+Features, architecture, workflows, and interfaces may change as the platform continues to evolve.
