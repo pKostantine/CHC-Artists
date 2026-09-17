@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { describeAuthError, signInWithGoogle } from '@/services/authService';
 import { supabase } from '@/services/supabase';
 import { Banner, Button } from '@/components/ui';
 
 type AuthMode = 'signIn' | 'signUp';
+
+const BRAND_MARK = require('../../assets/images/CHC_Artists_sm.png');
 
 export function SignInScreen({ initialError }: { initialError?: string }) {
   const [mode, setMode] = useState<AuthMode>('signIn');
@@ -84,6 +86,7 @@ export function SignInScreen({ initialError }: { initialError?: string }) {
     <KeyboardAvoidingView style={styles.wrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
+          <Image source={BRAND_MARK} style={styles.logo} resizeMode="contain" accessibilityLabel="CHC Artists" />
           <Text style={styles.eyebrow}>CHC ARTISTS</Text>
           <Text style={styles.title}>{mode === 'signUp' ? 'Create your creator account' : 'Create, manage, and submit to CHC'}</Text>
           <Text style={styles.subtitle}>Music and Learn & Study creator dashboard</Text>
@@ -185,6 +188,7 @@ const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: COLORS.black },
   scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING.md },
   card: { width: '100%', maxWidth: 480, gap: SPACING.md, padding: SPACING.lg, borderRadius: RADII.lg, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  logo: { width: 112, height: 112, alignSelf: 'center', marginBottom: -4 },
   eyebrow: { color: COLORS.gold, fontSize: 12, fontWeight: '900', letterSpacing: 2 },
   title: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 30, lineHeight: 38 },
   subtitle: { color: COLORS.goldBright, fontWeight: '800', fontSize: 16 },
