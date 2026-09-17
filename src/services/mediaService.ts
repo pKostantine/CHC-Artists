@@ -1,9 +1,9 @@
 import type { LyricEditorTrack } from '@/types/lyrics';
 
+const DEFAULT_MEDIA_BASE_URL = 'https://chc-media-resolver.hrmpdd8d6c.workers.dev';
+
 function getBaseUrl(): string {
-  const base = process.env.EXPO_PUBLIC_CHC_MEDIA_BASE_URL?.replace(/\/+$/, '');
-  if (!base) throw new Error('Missing EXPO_PUBLIC_CHC_MEDIA_BASE_URL.');
-  return base;
+  return (process.env.EXPO_PUBLIC_CHC_MEDIA_BASE_URL || DEFAULT_MEDIA_BASE_URL).replace(/\/+$/, '');
 }
 
 export function resolveTrackAudio(track: LyricEditorTrack): string | null {
