@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { CatalogOption, CreatorAccount, CreatorSubmission, SubmissionItem, SubmissionType, UploadCandidate } from '@/types/creator';
+import type { CatalogOption, CreatorAccount, CreatorSubmission, LocalizedMetadata, SubmissionItem, SubmissionItemRole, SubmissionType, UploadCandidate } from '@/types/creator';
 const UPLOAD_BASE = process.env.EXPO_PUBLIC_CHC_UPLOAD_URL || 'https://chc-upload-authorizer.hrmpdd8d6c.workers.dev';
 async function token(): Promise<string> { const { data } = await supabase.auth.getSession(); if (!data.session?.access_token) throw new Error('Your session expired. Sign in again.'); return data.session.access_token; }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
@@ -27,9 +27,9 @@ export const creatorService = {
     await new Promise<void>((resolve, reject) => { const xhr = new XMLHttpRequest(); xhr.open('PUT', `${UPLOAD_BASE}/uploads/${id}`); xhr.setRequestHeader('Authorization', `Bearer ${access}`); xhr.setRequestHeader('Content-Type', file.mimeType); xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(0.12 + (event.loaded / event.total) * 0.86); }; xhr.onerror = () => reject(new Error('Network error while uploading media.')); xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status}).`)); xhr.send(blob); });
     onProgress(1); return id;
   },
-  async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number): Promise<void> { const { error } = await supabase.rpc('add_media_submission_item', { p_submission_id: submissionId, p_upload_intent_id: uploadIntentId, p_media_asset_id: null, p_title: title, p_sort_order: order, p_required: true }); if (error) throw error; },
-  async createRelease(accountId: string, artistId: string, releaseType: string, title: string, description: string, localized: Record<string, string>): Promise<string> { const { data, error } = await supabase.schema('music').from('releases').insert({ owner_creator_account_id: accountId, primary_artist_id: artistId || null, release_type: releaseType, title, description: description || null }).select('id').single(); if (error) throw error; for (const [locale, value] of Object.entries(localized)) if (value.trim()) { const { error: localError } = await supabase.schema('music').from('release_localizations').upsert({ release_id: data.id, locale, title: value.trim(), is_primary: locale === 'en' }); if (localError) throw localError; } return data.id; },
-  async createLearningShell(kind: 'album' | 'lesson_set', accountId: string, cantorId: string, seasonId: string, hymnId: string, title: string, description: string, submissionId: string, localized: Record<string, string> = {}): Promise<string> {
+  async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number, role: SubmissionItemRole | null = null): Promise<void> { const { error } = await supabase.rpc('add_media_submission_item', { p_submission_id: submissionId, p_upload_intent_id: uploadIntentId, p_media_asset_id: null, p_title: title, p_sort_order: order, p_required: true, p_role: role }); if (error) throw error; },
+  async createRelease(accountId: string, artistId: string, releaseType: string, title: string, description: string, localized: Partial<LocalizedMetadata>): Promise<string> { const { data, error } = await supabase.schema('music').from('releases').insert({ owner_creator_account_id: accountId, primary_artist_id: artistId || null, release_type: releaseType, title, description: description || null }).select('id').single(); if (error) throw error; for (const [locale, value] of Object.entries(localized)) if (value.trim()) { const { error: localError } = await supabase.schema('music').from('release_localizations').upsert({ release_id: data.id, locale, title: value.trim(), is_primary: locale === 'en' }); if (localError) throw localError; } return data.id; },
+  async createLearningShell(kind: 'album' | 'lesson_set', accountId: string, cantorId: string, seasonId: string, hymnId: string, title: string, description: string, submissionId: string, localized: Partial<LocalizedMetadata> = {}): Promise<string> {
     const table = kind === 'album' ? 'albums' : 'lesson_sets';
     const payload: any = { owner_creator_account_id: accountId, cantor_id: cantorId, season_id: seasonId || null, title, description: description || null, submission_id: submissionId };
     if (kind === 'lesson_set') payload.hymn_id = hymnId;
@@ -45,6 +45,9 @@ export const creatorService = {
     }
     return data.id;
   },
-  async items(submissionId: string): Promise<SubmissionItem[]> { const { data, error } = await supabase.schema('media').from('submission_items').select('id,title,sort_order,required,media_asset_id,upload_intent_id').eq('submission_id', submissionId).order('sort_order'); if (error) throw error; return (data ?? []) as SubmissionItem[]; },
+  // The RPC is used instead of selecting the table directly because it also
+  // reports the live processing job -- status, attempts and the error message --
+  // which is the only way a creator can see why a submission is still working.
+  async items(submissionId: string): Promise<SubmissionItem[]> { const { data, error } = await supabase.rpc('get_creator_submission_items', { p_submission_id: submissionId }); if (error) throw error; return (data ?? []) as SubmissionItem[]; },
   describeError: message,
 };

@@ -5,7 +5,17 @@ export type MediaKind = 'audio' | 'video' | 'image';
 export interface CreatorAccount { id: string; display_name: string; status: string; role: string; }
 export interface CreatorSubmission { id: string; creator_account_id: string; submission_type: SubmissionType; title: string; description: string | null; status: PublicationStatus; submitted_at: string | null; review_due_at: string | null; review_notes: string | null; published_at: string | null; updated_at: string; }
 export interface CatalogOption { id: string; title: string; subtitle?: string | null; }
-export interface SubmissionItem { id: string; title: string | null; sort_order: number; required: boolean; media_asset_id: string | null; upload_intent_id: string | null; }
+export type SubmissionItemRole = 'artwork' | 'track' | 'lesson' | 'other';
+export type ProcessingJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+/** Shape returned by the get_creator_submission_items RPC. */
+export interface SubmissionItem {
+  id: string; title: string | null; role: SubmissionItemRole; sortOrder: number; required: boolean;
+  mediaAssetId: string | null; uploadIntentId: string | null; mediaType: MediaKind | 'document' | 'other' | null;
+  contentLength: number | null; uploadStatus: string | null;
+  processingStatus: ProcessingJobStatus | null; processingJobType: string | null;
+  processingAttemptCount: number | null; processingMaxAttempts: number | null;
+  processingError: string | null; processingAvailableAt: string | null;
+}
 export interface UploadCandidate { id: string; name: string; uri: string; mimeType: string; size: number; mediaType: MediaKind; progress: number; uploadIntentId?: string; uploaded?: boolean; error?: string; }
 export interface LocalizedMetadata { en: string; ar: string; cop: string; fr: string; }
 export interface CreatorDraft {

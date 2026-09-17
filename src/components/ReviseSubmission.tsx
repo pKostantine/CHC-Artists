@@ -7,6 +7,26 @@ import { creatorService } from '@/services/creatorService';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import type { CreatorSubmission, SubmissionItem, UploadCandidate } from '@/types/creator';
 
+/** What a creator needs to know about an item the pipeline is still working on. */
+function processingLabel(item: SubmissionItem): string | null {
+  switch (item.processingStatus) {
+    case 'queued':
+      return item.processingAttemptCount && item.processingAttemptCount > 0
+        ? `Retrying (attempt ${item.processingAttemptCount + 1} of ${item.processingMaxAttempts ?? '?'})`
+        : 'Waiting to be processed';
+    case 'processing':
+      return 'Processing now';
+    case 'completed':
+      return 'Processed';
+    case 'failed':
+      return 'Processing failed';
+    case 'cancelled':
+      return 'Processing cancelled';
+    default:
+      return item.uploadStatus === 'uploaded' ? 'Uploaded' : null;
+  }
+}
+
 /**
  * What a creator does after a reviewer asks for changes.
  *
@@ -65,7 +85,13 @@ export function ReviseSubmission({
         const intent = await creatorService.upload(accountId, file, (progress) =>
           setAdded((current) => current.map((entry) => (entry.id === file.id ? { ...entry, progress } : entry))),
         );
-        await creatorService.attachUpload(submission.id, intent, file.name, order);
+        await creatorService.attachUpload(
+          submission.id,
+          intent,
+          file.name,
+          order,
+          submission.submission_type === 'music_release' ? 'track' : 'lesson',
+        );
         order += 1;
       }
       await creatorService.submit(submission.id);
@@ -98,7 +124,16 @@ export function ReviseSubmission({
         {items.length ? (
           items.map((item) => (
             <View key={item.id} style={styles.row}>
-              <Text style={styles.rowTitle}>{item.sort_order + 1}. {item.title || 'Untitled item'}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>{item.sortOrder + 1}. {item.title || 'Untitled item'}</Text>
+                <Text style={styles.muted}>
+                  {item.role === 'artwork' ? 'Artwork' : item.role === 'lesson' ? 'Lesson media' : 'Track'}
+                  {processingLabel(item) ? ` • ${processingLabel(item)}` : ''}
+                </Text>
+                {item.processingStatus === 'failed' && item.processingError ? (
+                  <Text style={styles.warning}>{item.processingError}</Text>
+                ) : null}
+              </View>
             </View>
           ))
         ) : (
@@ -153,6 +188,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: COLORS.white, fontSize: 18, fontWeight: '900' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: COLORS.border },
   rowTitle: { color: COLORS.white, fontWeight: '800' },
+  warning: { color: '#ffc36b', fontSize: 12, marginTop: 4 },
   muted: { color: COLORS.muted, fontSize: 12, lineHeight: 18 },
   link: { color: COLORS.goldBright, fontWeight: '700' },
   remove: { color: '#ff8b8b', fontWeight: '700' },
