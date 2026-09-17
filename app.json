@@ -5,14 +5,29 @@
     "version": "0.1.0",
     "orientation": "default",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/images/CHC_Artists_App.png",
     "platforms": [
       "ios",
       "android",
       "web"
     ],
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "supportsTablet": true
+    },
+    "android": {
+      "icon": "./assets/images/CHC_Artists_App.png",
+      "adaptiveIcon": {
+        "backgroundColor": "#003566",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      }
+    },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/images/CHC_Artists_sm_web.png"
     },
     "plugins": [
       "expo-router",
