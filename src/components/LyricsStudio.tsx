@@ -1,8 +1,6 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,10 +8,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Banner, Loading, PageHeader } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { resolveTrackAudio } from '@/services/mediaService';
 import { listEditableTracks, loadLyricDraft, saveLyricDraft } from '@/services/lyricsService';
 import type { EditableLyricLine, LocaleCode, LyricEditorTrack, LyricKind } from '@/types/lyrics';
+import { confirmAction } from '@/utils/dialogs';
 import { exportLrcFile, importLrcFile } from '@/utils/lrcFiles';
 import {
   createLyricLinesFromText,
@@ -46,7 +46,13 @@ function formatTime(seconds: number): string {
   return `${minutes}:${String(wholeSeconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
 }
 
-export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
+type Message = { tone: 'success' | 'error'; text: string } | null;
+
+function errorText(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
+}
+
+export function LyricsStudio() {
   const [tracks, setTracks] = useState<LyricEditorTrack[]>([]);
   const [trackId, setTrackId] = useState<string | null>(null);
   const [locale, setLocale] = useState<LocaleCode>('cop');
@@ -57,7 +63,10 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
   const [pasteText, setPasteText] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<Message>(null);
+  const [dirty, setDirty] = useState(false);
+  // save_track_lyric_draft refuses to overwrite a published set, so say so before any editing.
+  const [published, setPublished] = useState(false);
 
   const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
   const audioUrl = selectedTrack ? resolveTrackAudio(selectedTrack) : null;
@@ -80,28 +89,41 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
         setTracks(result);
         setTrackId((current) => current ?? result[0]?.id ?? null);
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : String(error)))
+      .catch((error) => setMessage({ tone: 'error', text: errorText(error, 'Could not load your tracks.') }))
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     if (!trackId) return;
-    setMessage('');
+    setMessage(null);
     loadLyricDraft(trackId, locale, kind)
       .then((draft) => {
         setTitle(draft?.title ?? '');
         setSource(draft?.source ?? '');
         setLines(draft?.lines ?? []);
+        setPublished(draft?.publicationStatus === 'published');
+        setDirty(false);
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : String(error)));
+      .catch((error) => setMessage({ tone: 'error', text: errorText(error, 'Could not load this lyric set.') }));
   }, [trackId, locale, kind]);
 
+  // Marks unsaved work so switching track, language, or kind can warn first.
+  function editLines(update: (current: EditableLyricLine[]) => EditableLyricLine[]) {
+    setDirty(true);
+    setLines(update);
+  }
+
+  async function switchTo(apply: () => void) {
+    if (dirty && !(await confirmAction('Discard unsaved lyrics?', 'You have changes that are not saved to this lyric set.', 'Discard'))) return;
+    apply();
+  }
+
   function replaceLine(index: number, line: EditableLyricLine) {
-    setLines((current) => current.map((item, itemIndex) => (itemIndex === index ? line : item)));
+    editLines((current) => current.map((item, itemIndex) => (itemIndex === index ? line : item)));
   }
 
   function moveLine(index: number, delta: -1 | 1) {
-    setLines((current) => {
+    editLines((current) => {
       const target = index + delta;
       if (target < 0 || target >= current.length) return current;
       const next = [...current];
@@ -113,7 +135,7 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
   async function save() {
     if (!trackId) return;
     setSaving(true);
-    setMessage('');
+    setMessage(null);
     try {
       const saved = await saveLyricDraft({
         trackId,
@@ -125,9 +147,11 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
         lines,
       });
       setLines(saved.lines);
-      setMessage('Draft saved.');
+      setPublished(saved.publicationStatus === 'published');
+      setDirty(false);
+      setMessage({ tone: 'success', text: 'Draft saved.' });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not save lyrics.');
+      setMessage({ tone: 'error', text: errorText(error, 'Could not save lyrics.') });
     } finally {
       setSaving(false);
     }
@@ -136,9 +160,17 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
   async function importLrc() {
     try {
       const contents = await importLrcFile();
-      if (contents !== null) setLines(parseLrc(contents));
+      if (contents === null) return;
+      const parsed = parseLrc(contents);
+      if (!parsed.length) {
+        setMessage({ tone: 'error', text: 'That file has no lyric lines in it.' });
+        return;
+      }
+      if (lines.length && !(await confirmAction('Replace lines?', 'Importing replaces the current editable line list.', 'Replace'))) return;
+      editLines(() => parsed);
+      setMessage(null);
     } catch (error) {
-      Alert.alert('Could not import LRC', error instanceof Error ? error.message : String(error));
+      setMessage({ tone: 'error', text: `Could not import LRC: ${errorText(error, 'unknown error')}` });
     }
   }
 
@@ -146,46 +178,39 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
     try {
       await exportLrcFile(`${selectedTrack?.title ?? 'lyrics'}-${locale}-${kind}`, formatLrc(lines));
     } catch (error) {
-      Alert.alert('Could not export LRC', error instanceof Error ? error.message : String(error));
+      setMessage({ tone: 'error', text: `Could not export LRC: ${errorText(error, 'unknown error')}` });
     }
   }
 
-  function splitPastedLyrics() {
+  async function splitPastedLyrics() {
     const nextLines = createLyricLinesFromText(pasteText);
     if (!nextLines.length) return;
-    if (!lines.length) {
-      setLines(nextLines);
-      return;
-    }
-
-    Alert.alert('Replace lines?', 'This replaces the current editable line list.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Replace', style: 'destructive', onPress: () => setLines(nextLines) },
-    ]);
+    if (lines.length && !(await confirmAction('Replace lines?', 'This replaces the current editable line list.', 'Replace'))) return;
+    editLines(() => nextLines);
+    setPasteText('');
   }
 
-  if (loading) {
+  if (loading) return <Loading label="Loading your editable tracks…" />;
+
+  if (!tracks.length) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={COLORS.gold} />
-        <Text style={styles.muted}>Loading your editable tracks…</Text>
-      </View>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+        <PageHeader title="Lyrics Studio" subtitle="Write and time synchronized lyrics for your published tracks." />
+        {message?.tone === 'error' ? (
+          <Banner tone="error">{message.text}</Banner>
+        ) : (
+          <Banner tone="info">
+            No tracks are ready for lyrics yet. Once CHC publishes a music release from your submissions, its tracks appear here.
+          </Banner>
+        )}
+      </ScrollView>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>CHC ARTISTS</Text>
-          <Text style={styles.headerTitle}>Lyrics Studio</Text>
-        </View>
-        <Pressable style={styles.secondaryButton} onPress={onSignOut}>
-          <Text style={styles.secondaryButtonText}>Sign out</Text>
-        </Pressable>
-      </View>
-
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <PageHeader title="Lyrics Studio" subtitle="Write and time synchronized lyrics for your published tracks." />
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>Recording</Text>
           <View style={styles.trackList}>
@@ -193,7 +218,7 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
               <Pressable
                 key={track.id}
                 style={[styles.trackCard, track.id === trackId && styles.trackCardSelected]}
-                onPress={() => setTrackId(track.id)}
+                onPress={() => { if (track.id !== trackId) void switchTo(() => setTrackId(track.id)); }}
               >
                 <Text style={styles.trackTitle}>{track.title}</Text>
                 <Text style={styles.muted}>
@@ -203,29 +228,28 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
               </Pressable>
             ))}
           </View>
-          {!tracks.length && <Text style={styles.muted}>No editable music tracks were found for this account.</Text>}
         </View>
 
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>Lyric set</Text>
           <Text style={styles.label}>Language</Text>
-          <ChoiceChips options={LOCALES} value={locale} onChange={setLocale} />
+          <ChoiceChips options={LOCALES} value={locale} onChange={(next) => { if (next !== locale) void switchTo(() => setLocale(next)); }} />
           <Text style={styles.label}>Kind</Text>
-          <ChoiceChips options={KINDS} value={kind} onChange={setKind} />
+          <ChoiceChips options={KINDS} value={kind} onChange={(next) => { if (next !== kind) void switchTo(() => setKind(next)); }} />
           <View style={styles.twoColumn}>
             <TextInput
               style={[styles.input, styles.flex]}
               placeholder="Optional title"
               placeholderTextColor={COLORS.muted}
               value={title}
-              onChangeText={setTitle}
+              onChangeText={(value) => { setTitle(value); setDirty(true); }}
             />
             <TextInput
               style={[styles.input, styles.flex]}
               placeholder="Optional source / credit"
               placeholderTextColor={COLORS.muted}
               value={source}
-              onChangeText={setSource}
+              onChangeText={(value) => { setSource(value); setDirty(true); }}
             />
           </View>
         </View>
@@ -269,10 +293,10 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
           <View style={styles.rowBetween}>
             <Text style={styles.sectionTitle}>Paste or import</Text>
             <View style={styles.inlineButtons}>
-              <Pressable style={styles.secondaryButton} onPress={importLrc}>
+              <Pressable style={styles.secondaryButton} onPress={() => void importLrc()}>
                 <Text style={styles.secondaryButtonText}>Import LRC</Text>
               </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={exportLrc}>
+              <Pressable style={[styles.secondaryButton, !lines.length && styles.disabledButton]} disabled={!lines.length} onPress={() => void exportLrc()}>
                 <Text style={styles.secondaryButtonText}>Export LRC</Text>
               </Pressable>
             </View>
@@ -285,7 +309,7 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
             onChangeText={setPasteText}
             multiline
           />
-          <Pressable style={styles.secondaryButton} onPress={splitPastedLyrics}>
+          <Pressable style={[styles.secondaryButton, !pasteText.trim() && styles.disabledButton]} disabled={!pasteText.trim()} onPress={() => void splitPastedLyrics()}>
             <Text style={styles.secondaryButtonText}>Split into lines</Text>
           </Pressable>
         </View>
@@ -297,13 +321,20 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
               <Text style={styles.muted}>Play the track and press Mark on each line. Timestamps stay editable.</Text>
             </View>
             <Pressable
-              style={[styles.primaryButton, (saving || !trackId) && styles.disabledButton]}
-              disabled={saving || !trackId}
-              onPress={save}
+              style={[styles.primaryButton, (saving || !trackId || published) && styles.disabledButton]}
+              disabled={saving || !trackId || published}
+              onPress={() => void save()}
             >
-              <Text style={styles.primaryButtonText}>{saving ? 'Saving…' : 'Save draft'}</Text>
+              <Text style={styles.primaryButtonText}>{saving ? 'Saving…' : dirty ? 'Save draft •' : 'Save draft'}</Text>
             </Pressable>
           </View>
+
+          {published && (
+            <Banner tone="info">
+              This {LOCALES.find((x) => x.value === locale)?.label ?? locale} {kind} lyric set is already published, so it cannot be edited here.
+              Choose another language or kind to write a new set, or export it as LRC.
+            </Banner>
+          )}
 
           <View style={styles.lines}>
             {lines.map((line, index) => (
@@ -320,13 +351,13 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
                 })}
                 onMoveUp={() => moveLine(index, -1)}
                 onMoveDown={() => moveLine(index, 1)}
-                onDelete={() => setLines((current) => renumberLyricLines(current.filter((_, itemIndex) => itemIndex !== index)))}
+                onDelete={() => editLines((current) => renumberLyricLines(current.filter((_, itemIndex) => itemIndex !== index)))}
               />
             ))}
           </View>
 
           {!lines.length && <Text style={styles.muted}>Paste lyrics or import an LRC file to begin.</Text>}
-          {!!message && <Text style={message.includes('saved') ? styles.success : styles.error}>{message}</Text>}
+          {!!message && <Banner tone={message.tone}>{message.text}</Banner>}
         </View>
 
         <View style={styles.previewPanel}>
@@ -355,19 +386,6 @@ export function LyricsStudio({ onSignOut }: { onSignOut: () => void }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.black },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: SPACING.md, backgroundColor: COLORS.black },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.navyDark,
-  },
-  eyebrow: { color: COLORS.gold, fontSize: 11, fontWeight: '900', letterSpacing: 2 },
-  headerTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 28, marginTop: 3 },
   content: {
     width: '100%',
     maxWidth: 1180,
@@ -477,6 +495,5 @@ const styles = StyleSheet.create({
   previewLine: { color: COLORS.muted, fontFamily: TYPOGRAPHY.body, fontSize: 19, lineHeight: 28, opacity: 0.55 },
   previewActive: { color: COLORS.white, opacity: 1, fontSize: 23, fontWeight: '800' },
   arabic: { fontFamily: TYPOGRAPHY.arabic, textAlign: 'right', writingDirection: 'rtl' },
-  success: { color: COLORS.success, fontWeight: '700' },
   error: { color: '#FF8B8B', fontWeight: '700' },
 });

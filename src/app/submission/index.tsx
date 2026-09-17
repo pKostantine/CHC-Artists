@@ -1,0 +1,97 @@
+import { useCallback } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { Banner, Button, Card, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
+import { COLORS, RADII, SPACING } from '@/constants/theme';
+import { useWorkspace } from '@/context/WorkspaceContext';
+import type { PublicationStatus } from '@/types/creator';
+import { shortDate, submissionTypeLabel } from '@/utils/format';
+
+const IN_REVIEW: PublicationStatus[] = ['pending_review', 'approved', 'processing'];
+
+export default function SubmissionsDashboard() {
+  const { dashboard, loading, error, refresh, draft } = useWorkspace();
+  const { submissions } = dashboard;
+
+  // Pick up reviewer decisions when the creator comes back to this page.
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
+
+  const needsAction = submissions.filter((s) => s.status === 'changes_requested');
+  const draftInProgress = Boolean(draft.title || draft.media.length || draft.artwork);
+  const stats = [
+    { label: 'Needs changes', value: needsAction.length },
+    { label: 'In review', value: submissions.filter((s) => IN_REVIEW.includes(s.status)).length },
+    { label: 'Published', value: submissions.filter((s) => s.status === 'published').length },
+  ];
+
+  return (
+    <Page>
+      <PageHeader
+        title="Submissions"
+        subtitle="Send Music and Learn & Study work to CHC and follow it from review to publication."
+        action={<Button kind="primary" label={draftInProgress ? 'Continue draft' : 'New submission'} onPress={() => router.push('/submission/new')} />}
+      />
+
+      {!!error && (
+        <Banner tone="error">{error}</Banner>
+      )}
+
+      {needsAction.length > 0 && (
+        <Banner tone="warning">
+          {needsAction.length === 1 ? '1 submission needs' : `${needsAction.length} submissions need`} changes before CHC can approve it.
+        </Banner>
+      )}
+
+      <View style={styles.stats}>
+        {stats.map((stat) => (
+          <View key={stat.label} style={styles.stat}>
+            <Text style={styles.statNum}>{stat.value}</Text>
+            <Text style={uiStyles.muted}>{stat.label}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Card title="Your submissions">
+        {loading && !submissions.length ? (
+          <Loading label="Loading submissions…" />
+        ) : submissions.length ? (
+          submissions.map((s) => (
+            <Pressable
+              key={s.id}
+              accessibilityRole="link"
+              onPress={() => router.push({ pathname: '/submission/[id]', params: { id: s.id } })}
+              style={({ pressed }) => [uiStyles.row, pressed && styles.pressed]}
+            >
+              <View style={styles.rowText}>
+                <Text style={uiStyles.rowTitle}>{s.title}</Text>
+                <Text style={uiStyles.muted}>
+                  {submissionTypeLabel(s.submissionType)} • {s.itemCount} file{s.itemCount === 1 ? '' : 's'} • Updated {shortDate(s.updatedAt)}
+                </Text>
+                {s.status === 'changes_requested' && !!s.reviewNotes && (
+                  <Text style={styles.warning} numberOfLines={2}>Changes requested: {s.reviewNotes}</Text>
+                )}
+              </View>
+              <StatusPill status={s.status} />
+              <Text style={uiStyles.link}>{s.status === 'changes_requested' ? 'Address changes ›' : 'View ›'}</Text>
+            </Pressable>
+          ))
+        ) : (
+          <View style={styles.empty}>
+            <Text style={uiStyles.rowTitle}>No submissions yet</Text>
+            <Text style={uiStyles.muted}>Start a music release, learning album, or lesson set. Your files stay private until CHC publishes them.</Text>
+          </View>
+        )}
+      </Card>
+    </Page>
+  );
+}
+
+const styles = StyleSheet.create({
+  stats: { flexDirection: 'row', gap: SPACING.md, flexWrap: 'wrap' },
+  stat: { flexGrow: 1, minWidth: 140, padding: SPACING.lg, borderRadius: RADII.md, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  statNum: { color: COLORS.goldBright, fontSize: 30, fontWeight: '900' },
+  rowText: { flex: 1, minWidth: 200, gap: 3 },
+  warning: { color: '#ffc36b', marginTop: 4 },
+  pressed: { opacity: 0.75 },
+  empty: { gap: 6, paddingVertical: SPACING.sm },
+});

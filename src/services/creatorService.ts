@@ -1,5 +1,13 @@
 import { supabase } from '@/services/supabase';
-import type { CatalogOption, CreatorAccount, CreatorSubmission, SubmissionItem, SubmissionType, UploadCandidate } from '@/types/creator';
+import type {
+  CatalogOption,
+  CatalogOptions,
+  CreatorAccount,
+  CreatorDashboardData,
+  CreatorDraft,
+  SubmissionItem,
+  UploadCandidate,
+} from '@/types/creator';
 
 const UPLOAD_BASE = process.env.EXPO_PUBLIC_CHC_UPLOAD_URL || 'https://chc-upload-authorizer.hrmpdd8d6c.workers.dev';
 
@@ -29,8 +37,26 @@ async function token(): Promise<string> {
   return data.session.access_token;
 }
 
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+/** PostgREST errors are plain objects, not Error instances. */
+function describeError(error: unknown): string {
+  const raw = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : String(error);
+  if (/submission_items_upload_intent_id_unique/.test(raw)) {
+    return 'One of these files is already part of another submission. Remove it and upload it again.';
+  }
+  if (/Failed to fetch|Network request failed/i.test(raw)) {
+    return 'Could not reach CHC. Check your connection and try again.';
+  }
+  return raw;
+}
+
+async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) throw new Error(describeError(error));
+  return data as T;
 }
 
 function validMediaType(value?: string | null): value is string {
@@ -46,124 +72,87 @@ function contentTypeFor(file: UploadCandidate, blob: Blob): string {
   throw new Error(`Could not determine a supported media type for ${file.name}.`);
 }
 
+/** The upload worker answers with {"error": code, "message": text}. */
 async function responseFailure(response: Response, label: string): Promise<Error> {
   let detail = '';
   try {
-    detail = (await response.text()).trim();
+    const text = (await response.text()).trim();
+    try {
+      const body = JSON.parse(text) as { message?: string; error?: string };
+      detail = body.message || body.error || text;
+    } catch {
+      detail = text;
+    }
   } catch {
-    // The HTTP status still gives us a useful error if the response has no text body.
+    // The HTTP status still gives a useful error if the response has no body.
   }
   return new Error(`${label} (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
 }
 
 export const creatorService = {
-  async ensureWorkspace(displayName?: string): Promise<void> {
-    const { error } = await supabase.rpc('ensure_creator_workspace', {
-      p_display_name: displayName?.trim() || null,
-    });
-    if (error) throw error;
+  async ensureWorkspace(): Promise<void> {
+    await rpc('ensure_creator_workspace', { p_display_name: null });
   },
 
-  async accounts(): Promise<CreatorAccount[]> {
-    const { data: session } = await supabase.auth.getUser();
-    if (!session.user) return [];
-    const { data, error } = await supabase
-      .schema('creator')
-      .from('creator_account_members')
-      .select('role, creator_accounts!inner(id, display_name, status)')
-      .eq('user_id', session.user.id);
-    if (error) throw error;
-    return (data ?? []).map((row: any) => ({
-      id: row.creator_accounts.id,
-      display_name: row.creator_accounts.display_name,
-      status: row.creator_accounts.status,
-      role: row.role,
-    }));
+  accounts(): Promise<CreatorAccount[]> {
+    return rpc<CreatorAccount[]>('get_creator_workspaces');
   },
 
-  async submissions(accountId: string): Promise<CreatorSubmission[]> {
-    const { data, error } = await supabase
-      .schema('media')
-      .from('submissions')
-      .select('id,creator_account_id,submission_type,title,description,status,submitted_at,review_due_at,review_notes,published_at,updated_at')
-      .eq('creator_account_id', accountId)
-      .order('updated_at', { ascending: false });
-    if (error) throw error;
-    return (data ?? []) as CreatorSubmission[];
+  dashboard(accountId: string): Promise<CreatorDashboardData> {
+    return rpc<CreatorDashboardData>('get_creator_dashboard', { p_creator_account_id: accountId });
   },
 
-  async artists(accountId: string): Promise<CatalogOption[]> {
-    const { data, error } = await supabase
-      .schema('music')
-      .from('artists')
-      .select('id,display_name,publication_status')
-      .eq('owner_creator_account_id', accountId)
-      .order('display_name');
-    if (error) throw error;
-    return (data ?? []).map((x: any) => ({ id: x.id, title: x.display_name, subtitle: x.publication_status }));
+  catalogOptions(): Promise<CatalogOptions> {
+    return rpc<CatalogOptions>('get_creator_catalog_options');
   },
 
-  async cantors(accountId: string): Promise<CatalogOption[]> {
-    const { data, error } = await supabase
-      .schema('learning')
-      .from('cantors')
-      .select('id,display_name,publication_status')
-      .eq('owner_creator_account_id', accountId)
-      .order('display_name');
-    if (error) throw error;
-    return (data ?? []).map((x: any) => ({ id: x.id, title: x.display_name, subtitle: x.publication_status }));
+  createArtist(accountId: string, displayName: string): Promise<CatalogOption> {
+    return rpc<CatalogOption>('create_creator_artist', { p_creator_account_id: accountId, p_display_name: displayName });
   },
 
-  async seasons(): Promise<CatalogOption[]> {
-    const { data, error } = await supabase.schema('learning').from('seasons').select('id,title,slug').order('sort_order');
-    if (error) throw error;
-    return (data ?? []).map((x: any) => ({ id: x.id, title: x.title, subtitle: x.slug }));
+  createCantor(accountId: string, displayName: string): Promise<CatalogOption> {
+    return rpc<CatalogOption>('create_creator_cantor', { p_creator_account_id: accountId, p_display_name: displayName });
   },
 
-  async hymns(): Promise<CatalogOption[]> {
-    const { data, error } = await supabase.schema('learning').from('hymns').select('id,title,subtitle').order('title');
-    if (error) throw error;
-    return (data ?? []).map((x: any) => ({ id: x.id, title: x.title, subtitle: x.subtitle }));
+  items(submissionId: string): Promise<SubmissionItem[]> {
+    return rpc<SubmissionItem[]>('get_creator_submission_items', { p_submission_id: submissionId });
   },
 
-  async createArtist(accountId: string, displayName: string): Promise<CatalogOption> {
-    const { data, error } = await supabase
-      .schema('music')
-      .from('artists')
-      .insert({ owner_creator_account_id: accountId, display_name: displayName.trim() })
-      .select('id,display_name')
-      .single();
-    if (error) throw error;
-    return { id: data.id, title: data.display_name };
-  },
-
-  async createCantor(accountId: string, displayName: string): Promise<CatalogOption> {
-    const { data, error } = await supabase
-      .schema('learning')
-      .from('cantors')
-      .insert({ owner_creator_account_id: accountId, display_name: displayName.trim() })
-      .select('id,display_name')
-      .single();
-    if (error) throw error;
-    return { id: data.id, title: data.display_name };
-  },
-
-  async createSubmission(accountId: string, type: SubmissionType, title: string, description?: string): Promise<string> {
-    const { data, error } = await supabase.rpc('create_media_submission', {
+  /** Creates the submission, its catalog record, and its items, then submits it — all in one transaction. */
+  createSubmission(accountId: string, draft: CreatorDraft): Promise<{ submissionId: string; status: string }> {
+    const items = [
+      ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
+      ...draft.media.map((file) => ({ uploadIntentId: file.uploadIntentId, title: file.name, role: 'media' })),
+    ];
+    const isMusic = draft.mode === 'music';
+    return rpc('create_creator_submission', {
       p_creator_account_id: accountId,
-      p_submission_type: type,
-      p_title: title,
-      p_description: description || null,
+      p_mode: draft.mode,
+      p_title: draft.title,
+      p_description: draft.description || null,
+      p_release_type: isMusic ? draft.releaseType : null,
+      p_artist_id: isMusic ? draft.artistId || null : null,
+      p_cantor_id: isMusic ? null : draft.cantorId || null,
+      p_season_id: isMusic ? null : draft.seasonId || null,
+      p_hymn_id: draft.mode === 'learning_lesson_set' ? draft.hymnId || null : null,
+      p_localized_titles: draft.localizedTitle,
+      p_items: items,
     });
-    if (error) throw error;
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row?.submission_id) throw new Error('Submission was not created.');
-    return row.submission_id;
+  },
+
+  async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number): Promise<void> {
+    await rpc('add_media_submission_item', {
+      p_submission_id: submissionId,
+      p_upload_intent_id: uploadIntentId,
+      p_media_asset_id: null,
+      p_title: title,
+      p_sort_order: order,
+      p_required: true,
+    });
   },
 
   async submit(id: string): Promise<void> {
-    const { error } = await supabase.rpc('submit_media_submission', { p_submission_id: id });
-    if (error) throw error;
+    await rpc('submit_media_submission', { p_submission_id: id });
   },
 
   async upload(accountId: string, file: UploadCandidate, onProgress: (value: number) => void): Promise<string> {
@@ -226,74 +215,5 @@ export const creatorService = {
     return id;
   },
 
-  async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number): Promise<void> {
-    const { error } = await supabase.rpc('add_media_submission_item', {
-      p_submission_id: submissionId,
-      p_upload_intent_id: uploadIntentId,
-      p_media_asset_id: null,
-      p_title: title,
-      p_sort_order: order,
-      p_required: true,
-    });
-    if (error) throw error;
-  },
-
-  async createRelease(accountId: string, artistId: string, releaseType: string, title: string, description: string, localized: Record<string, string>): Promise<string> {
-    const { data, error } = await supabase
-      .schema('music')
-      .from('releases')
-      .insert({ owner_creator_account_id: accountId, primary_artist_id: artistId || null, release_type: releaseType, title, description: description || null })
-      .select('id')
-      .single();
-    if (error) throw error;
-    for (const [locale, value] of Object.entries(localized)) {
-      if (!value.trim()) continue;
-      const { error: localError } = await supabase
-        .schema('music')
-        .from('release_localizations')
-        .upsert({ release_id: data.id, locale, title: value.trim(), is_primary: locale === 'en' });
-      if (localError) throw localError;
-    }
-    return data.id;
-  },
-
-  async createLearningShell(kind: 'album' | 'lesson_set', accountId: string, cantorId: string, seasonId: string, hymnId: string, title: string, description: string, submissionId: string, localized: Record<string, string> = {}): Promise<string> {
-    const table = kind === 'album' ? 'albums' : 'lesson_sets';
-    const payload: any = {
-      owner_creator_account_id: accountId,
-      cantor_id: cantorId,
-      season_id: seasonId || null,
-      title,
-      description: description || null,
-      submission_id: submissionId,
-    };
-    if (kind === 'lesson_set') payload.hymn_id = hymnId;
-    const { data, error } = await supabase.schema('learning').from(table).insert(payload).select('id').single();
-    if (error) throw error;
-
-    const localizationTable = kind === 'album' ? 'album_localizations' : 'lesson_set_localizations';
-    const parentColumn = kind === 'album' ? 'album_id' : 'lesson_set_id';
-    for (const [locale, value] of Object.entries(localized)) {
-      if (!value.trim()) continue;
-      const { error: localError } = await supabase
-        .schema('learning')
-        .from(localizationTable)
-        .upsert({ [parentColumn]: data.id, locale, title: value.trim() }, { onConflict: `${parentColumn},locale` });
-      if (localError) throw localError;
-    }
-    return data.id;
-  },
-
-  async items(submissionId: string): Promise<SubmissionItem[]> {
-    const { data, error } = await supabase
-      .schema('media')
-      .from('submission_items')
-      .select('id,title,sort_order,required,media_asset_id,upload_intent_id')
-      .eq('submission_id', submissionId)
-      .order('sort_order');
-    if (error) throw error;
-    return (data ?? []) as SubmissionItem[];
-  },
-
-  describeError: message,
+  describeError,
 };

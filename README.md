@@ -168,6 +168,43 @@ Any monetization system will require its own eligibility, legal, advertising, pa
 
 ---
 
+## App Sections and URLs
+
+CHC Artists is one app with two sections, each at its own address (Expo Router, `src/app/`):
+
+| URL | What it is |
+| --- | --- |
+| `/submission` | Dashboard: every submission and its review status |
+| `/submission/new` | New music release, learning album, or lesson set |
+| `/submission/<id>` | One submission: files, processing state, and the requested-changes flow |
+| `/lyrics` | Lyrics Studio for synchronized lyrics |
+
+`/` redirects to `/submission`. Signing in keeps the address the creator asked for, so a link to `/lyrics` lands in Lyrics Studio after sign-in. On native the same routes are deep links under the `chcartists://` scheme.
+
+## Development
+
+```sh
+npm install
+npm run web        # Expo dev server
+npm run typecheck
+npm run deploy     # expo export -p web, then wrangler deploy
+```
+
+The app talks to Supabase only through public RPCs; the `creator`, `media`, `music`, and `learning` schemas are not exposed through the Data API. The creator RPCs (`get_creator_workspaces`, `get_creator_dashboard`, `create_creator_artist`, `create_creator_submission`, and friends) live in the main CHC repository under `supabase/migrations/20260917160000_add_chc_artists_creator_rpcs.sql`.
+
+### Google sign-in setup
+
+"Continue with Google" uses Supabase OAuth with PKCE. It needs, once per Supabase project:
+
+1. **Google Cloud Console** — create an OAuth client of type *Web application*. Add `https://wtuujmeinzqfikvuofmh.supabase.co/auth/v1/callback` as an authorized redirect URI.
+2. **Supabase Dashboard → Authentication → Sign In / Providers → Google** — enable it and paste the client ID and secret.
+3. **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** — allow every place the app runs:
+   - `https://chc-artists.hrmpdd8d6c.workers.dev/**` (and any custom domain)
+   - `http://localhost:8081/**` for local web development
+   - `chcartists://**` for the iOS and Android apps
+
+Until the provider is enabled, the button explains that Google sign-in is not switched on instead of sending the creator to an error page.
+
 ## Relationship to CHC
 
 CHC Artists is part of the larger **Coptic Hymns Centre** application ecosystem.
