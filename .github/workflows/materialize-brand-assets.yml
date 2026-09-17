@@ -1,0 +1,48 @@
+name: Materialize CHC Artists branding assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.brand-assets/**'
+      - '.github/workflows/materialize-brand-assets.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Pillow
+        run: python -m pip install --disable-pip-version-check pillow
+
+      - name: Rebuild source image
+        run: cat .brand-assets/source.part* | tr -d '\n' | base64 --decode > /tmp/chc-artists-source.webp
+
+      - name: Generate platform assets
+        run: python scripts/generate_brand_assets.py /tmp/chc-artists-source.webp
+
+      - name: Commit generated assets
+        run: |
+          rm -rf .brand-assets
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A .brand-assets assets/images assets/expo.icon
+          if git diff --cached --quiet; then
+            echo "No branding changes to commit."
+            exit 0
+          fi
+          git commit -m "Add CHC Artists branding assets"
+          git push origin HEAD:main
