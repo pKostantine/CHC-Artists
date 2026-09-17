@@ -26,15 +26,23 @@ The app never requires creators to manually edit Supabase records or handle R2 c
 
 ## Environment
 
+No local environment file is required to run the normal CHC Artists app. The live CHC Supabase URL, Supabase publishable key, media resolver URL, and upload-authorizer URL are public client configuration and have safe built-in defaults.
+
+If you need to point a local build at different public services, copy the example and override whichever values you need:
+
 ```bash
 cp .env.example .env.local
 ```
 
-`.env.example` already points at the live CHC services; only
-`EXPO_PUBLIC_SUPABASE_ANON_KEY` needs filling in, from Supabase under Project
-Settings → API. `.env.local` is gitignored, so every fresh clone needs this
-step before the app will start -- without it the bundle throws as it loads and
-nothing renders.
+Supported overrides:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` (legacy compatibility)
+- `EXPO_PUBLIC_CHC_MEDIA_BASE_URL`
+- `EXPO_PUBLIC_CHC_UPLOAD_URL`
+
+Never place a Supabase secret key or `service_role` key in an `EXPO_PUBLIC_*` variable or in client source.
 
 ## Run
 
@@ -66,10 +74,7 @@ Use an authenticated CHC account with creator or admin access.
 
 ### If Expo says `package.json` does not exist
 
-`package.json`, `package-lock.json`, and `app.json` are tracked at the repository
-root. If Expo reports that one is missing, the local checkout is incomplete or
-out of sync with GitHub. From the `CHC-Artists` directory, restore the current
-`main` manifest without touching application source files:
+`package.json`, `package-lock.json`, and `app.json` are tracked at the repository root. If Expo reports that one is missing, the local checkout is incomplete or out of sync with GitHub. From the `CHC-Artists` directory, restore the current `main` manifest without touching application source files:
 
 ```bash
 git fetch origin
@@ -82,37 +87,19 @@ npx expo start -c
 
 ## Deploy
 
-The site is a static Expo web export served by the `chc-artists` Worker
-(`wrangler.jsonc`), alongside `chc-upload-authorizer` and `chc-media-resolver`.
-The asset config uses the single-page fallback, so a path with no file behind
-it serves the app rather than 404ing.
+The site is a static Expo web export served by the `chc-artists` Worker (`wrangler.jsonc`), alongside `chc-upload-authorizer` and `chc-media-resolver`. The asset config uses the single-page fallback, so a path with no file behind it serves the app rather than 404ing.
 
 ```bash
 npm run build     # expo export -p web  ->  dist/
 npm run deploy    # builds, then wrangler deploy
 ```
 
-The deployed address is `https://chc-artists.<account>.workers.dev`. A Worker
-never answers on `pages.dev`, whatever it is named -- that is Cloudflare's
-separate Pages product, and nothing is published there.
+The deployed address is `https://chc-artists.<account>.workers.dev`. A Worker never answers on `pages.dev`, whatever it is named -- that is Cloudflare's separate Pages product, and nothing is published there.
 
-Deploying from Cloudflare's Git integration instead: build command
-`npm run build`, output directory `dist`.
+Deploying from Cloudflare's Git integration instead: build command `npm run build`, output directory `dist`.
 
-### The four build-time variables are not optional
+### Build-time overrides
 
-`EXPO_PUBLIC_*` values are compiled into the bundle by `npm run build`, not
-read at runtime, so whatever machine builds the site must have them. They
-must therefore be set as **build** environment variables in Cloudflare, not
-only as runtime secrets:
+Expo compiles `EXPO_PUBLIC_*` variables into the bundle. They are optional for the normal production CHC services because the app contains public defaults, but Cloudflare build variables can still override them when intentionally targeting a different project or endpoint.
 
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_CHC_MEDIA_BASE_URL`
-- `EXPO_PUBLIC_CHC_UPLOAD_URL`
-
-A build that runs without the two Supabase variables still succeeds and still
-deploys, but `src/services/supabase.ts` throws as the bundle loads and the
-page renders blank with `Missing EXPO_PUBLIC_SUPABASE_URL or
-EXPO_PUBLIC_SUPABASE_ANON_KEY` in the browser console. A blank page is worth
-checking there first.
+The Supabase client uses a publishable key, not a secret key. Authorization remains enforced by Supabase Auth and Row Level Security.
