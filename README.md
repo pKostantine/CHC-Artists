@@ -72,19 +72,6 @@ npm run web
 
 Use an authenticated CHC account with creator or admin access.
 
-### If Expo says `package.json` does not exist
-
-`package.json`, `package-lock.json`, and `app.json` are tracked at the repository root. If Expo reports that one is missing, the local checkout is incomplete or out of sync with GitHub. From the `CHC-Artists` directory, restore the current `main` manifest without touching application source files:
-
-```bash
-git fetch origin
-git switch main
-git pull --ff-only origin main
-git restore --source=origin/main -- package.json package-lock.json app.json tsconfig.json
-npm install
-npx expo start -c
-```
-
 ## Deploy
 
 The site is a static Expo web export served by the `chc-artists` Worker (`wrangler.jsonc`), alongside `chc-upload-authorizer` and `chc-media-resolver`. The asset config uses the single-page fallback, so a path with no file behind it serves the app rather than 404ing.
