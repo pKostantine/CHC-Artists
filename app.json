@@ -31,7 +31,7 @@
     },
     "splash": {
       "backgroundColor": "#003566",
-      "image": "./assets/images/CHC_Artists_sm.png",
+      "image": "./assets/images/CHC_Artists_App.png",
       "resizeMode": "contain"
     },
     "plugins": [
