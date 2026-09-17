@@ -2,7 +2,9 @@ name: Materialize CHC Artists branding assets
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - branding/chc-artists-logo
     paths:
       - '.brand-assets/**'
       - '.github/workflows/materialize-brand-assets.yml'
@@ -45,4 +47,4 @@ jobs:
             exit 0
           fi
           git commit -m "Add CHC Artists branding assets"
-          git push origin HEAD:main
+          git push origin HEAD:${GITHUB_REF_NAME}
