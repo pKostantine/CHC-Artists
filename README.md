@@ -38,12 +38,47 @@ nothing renders.
 
 ## Run
 
+Install dependencies once:
+
 ```bash
 npm install
+```
+
+For Expo Go on iOS or Android:
+
+```bash
+npx expo start
+```
+
+If Metro has stale state after dependency or config changes:
+
+```bash
+npx expo start -c
+```
+
+For the web app:
+
+```bash
 npm run web
 ```
 
 Use an authenticated CHC account with creator or admin access.
+
+### If Expo says `package.json` does not exist
+
+`package.json`, `package-lock.json`, and `app.json` are tracked at the repository
+root. If Expo reports that one is missing, the local checkout is incomplete or
+out of sync with GitHub. From the `CHC-Artists` directory, restore the current
+`main` manifest without touching application source files:
+
+```bash
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git restore --source=origin/main -- package.json package-lock.json app.json tsconfig.json
+npm install
+npx expo start -c
+```
 
 ## Deploy
 
