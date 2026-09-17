@@ -1,25 +1,28 @@
 # CHC Artists
 
-Creator and management companion application for the Coptic Hymns Centre ecosystem.
+Creator and management companion application for the Coptic Hymns Centre ecosystem. This is the separate CHC Artists application and shares the existing CHC Supabase, Cloudflare/R2 media pipeline, and backend contracts.
 
-## Phase 7: Lyrics Studio
+## Phase 15 Creator Application
 
-The initial application surface is the synchronized-lyrics editor required by Phase 7 of `CHC_Media_Platform_Implementation_Phases.md` in the main CHC repository.
+Implemented creator-facing workflows:
 
-Implemented:
+- Supabase authentication and persisted web sessions
+- creator-account dashboard and account switching
+- Music and Learn & Study submission status tracking
+- requested-changes notes, processing, review, and publication states
+- artist and cantor creation/management entry points
+- Music release creation for Single / EP / Album
+- Learning Album and Lesson Set creation
+- cantor, season, and hymn selection
+- English, Arabic, Coptic, and French metadata editing
+- artwork and large media selection
+- secure upload through the CHC upload-authorizer Worker into private `chc-submissions` R2 storage
+- live upload progress
+- track/lesson ordering controls
+- submission preview and submission to the existing 48-hour moderation workflow
+- existing synchronized Lyrics Studio retained as a first-class creator tool
 
-- creator/admin Supabase sign-in
-- editable music-track discovery
-- Coptic, Arabic, English, and French lyric sets
-- original / translation / transliteration kinds
-- paste lyrics and split into editable lines
-- line reorder, delete, and text editing
-- audio playback from the CHC media resolver
-- one-tap timestamp marking from live playback position
-- direct timestamp editing
-- real-time active-line preview
-- atomic draft saves through `save_track_lyric_draft`
-- LRC import/export (LRC is interchange only, not canonical storage)
+The app never requires creators to manually edit Supabase records or handle R2 credentials.
 
 ## Environment
 
@@ -28,8 +31,7 @@ Copy `.env.example` to `.env.local` and provide:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_CHC_MEDIA_BASE_URL`
-
-The project intentionally shares the existing CHC Supabase and Cloudflare media infrastructure.
+- `EXPO_PUBLIC_CHC_UPLOAD_URL` (defaults to the deployed CHC upload authorizer)
 
 ## Run
 
