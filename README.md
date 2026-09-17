@@ -26,12 +26,15 @@ The app never requires creators to manually edit Supabase records or handle R2 c
 
 ## Environment
 
-Copy `.env.example` to `.env.local` and provide:
+```bash
+cp .env.example .env.local
+```
 
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
-- `EXPO_PUBLIC_CHC_MEDIA_BASE_URL`
-- `EXPO_PUBLIC_CHC_UPLOAD_URL` (defaults to the deployed CHC upload authorizer)
+`.env.example` already points at the live CHC services; only
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` needs filling in, from Supabase under Project
+Settings → API. `.env.local` is gitignored, so every fresh clone needs this
+step before the app will start -- without it the bundle throws as it loads and
+nothing renders.
 
 ## Run
 
