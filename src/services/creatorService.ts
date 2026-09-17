@@ -1,5 +1,5 @@
 import { supabase } from '@/services/supabase';
-import type { CatalogOption, CreatorAccount, CreatorSubmission, MediaKind, SubmissionType, UploadCandidate } from '@/types/creator';
+import type { CatalogOption, CreatorAccount, CreatorSubmission, SubmissionItem, SubmissionType, UploadCandidate } from '@/types/creator';
 const UPLOAD_BASE = process.env.EXPO_PUBLIC_CHC_UPLOAD_URL || 'https://chc-upload-authorizer.hrmpdd8d6c.workers.dev';
 async function token(): Promise<string> { const { data } = await supabase.auth.getSession(); if (!data.session?.access_token) throw new Error('Your session expired. Sign in again.'); return data.session.access_token; }
 function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
@@ -29,6 +29,22 @@ export const creatorService = {
   },
   async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number): Promise<void> { const { error } = await supabase.rpc('add_media_submission_item', { p_submission_id: submissionId, p_upload_intent_id: uploadIntentId, p_media_asset_id: null, p_title: title, p_sort_order: order, p_required: true }); if (error) throw error; },
   async createRelease(accountId: string, artistId: string, releaseType: string, title: string, description: string, localized: Record<string, string>): Promise<string> { const { data, error } = await supabase.schema('music').from('releases').insert({ owner_creator_account_id: accountId, primary_artist_id: artistId || null, release_type: releaseType, title, description: description || null }).select('id').single(); if (error) throw error; for (const [locale, value] of Object.entries(localized)) if (value.trim()) { const { error: localError } = await supabase.schema('music').from('release_localizations').upsert({ release_id: data.id, locale, title: value.trim(), is_primary: locale === 'en' }); if (localError) throw localError; } return data.id; },
-  async createLearningShell(kind: 'album' | 'lesson_set', accountId: string, cantorId: string, seasonId: string, hymnId: string, title: string, description: string, submissionId: string): Promise<string> { const table = kind === 'album' ? 'albums' : 'lesson_sets'; const payload: any = { owner_creator_account_id: accountId, cantor_id: cantorId, season_id: seasonId || null, title, description: description || null, submission_id: submissionId }; if (kind === 'lesson_set') payload.hymn_id = hymnId; const { data, error } = await supabase.schema('learning').from(table).insert(payload).select('id').single(); if (error) throw error; return data.id; },
+  async createLearningShell(kind: 'album' | 'lesson_set', accountId: string, cantorId: string, seasonId: string, hymnId: string, title: string, description: string, submissionId: string, localized: Record<string, string> = {}): Promise<string> {
+    const table = kind === 'album' ? 'albums' : 'lesson_sets';
+    const payload: any = { owner_creator_account_id: accountId, cantor_id: cantorId, season_id: seasonId || null, title, description: description || null, submission_id: submissionId };
+    if (kind === 'lesson_set') payload.hymn_id = hymnId;
+    const { data, error } = await supabase.schema('learning').from(table).insert(payload).select('id').single(); if (error) throw error;
+    // The dashboard collects localized titles for every submission type, so a
+    // learning album has to store them the way a release does -- otherwise the
+    // creator types them and they are silently dropped.
+    const localizationTable = kind === 'album' ? 'album_localizations' : 'lesson_set_localizations';
+    const parentColumn = kind === 'album' ? 'album_id' : 'lesson_set_id';
+    for (const [locale, value] of Object.entries(localized)) if (value.trim()) {
+      const { error: localError } = await supabase.schema('learning').from(localizationTable).upsert({ [parentColumn]: data.id, locale, title: value.trim() }, { onConflict: `${parentColumn},locale` });
+      if (localError) throw localError;
+    }
+    return data.id;
+  },
+  async items(submissionId: string): Promise<SubmissionItem[]> { const { data, error } = await supabase.schema('media').from('submission_items').select('id,title,sort_order,required,media_asset_id,upload_intent_id').eq('submission_id', submissionId).order('sort_order'); if (error) throw error; return (data ?? []) as SubmissionItem[]; },
   describeError: message,
 };
