@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router, usePathname, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
@@ -12,6 +12,7 @@ const SECTIONS: { href: Href; match: string; label: string; description: string 
 ];
 
 const WIDE = 900;
+const BRAND_MARK = require('../../assets/images/CHC_Artists_sm.png');
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { width } = useWindowDimensions();
@@ -56,7 +57,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <View style={styles.wideRoot}>
         <View style={[styles.sidebar, { paddingTop: SPACING.lg + insets.top }]}>
-          <Text style={styles.brand}>CHC ARTISTS</Text>
+          <View style={styles.brandRow}>
+            <Image source={BRAND_MARK} style={styles.brandLogo} resizeMode="contain" accessible={false} />
+            <Text style={styles.brand}>CHC ARTISTS</Text>
+          </View>
           <Text style={styles.account} numberOfLines={2}>{account?.displayName || 'Creator workspace'}</Text>
           {workspaceSwitcher}
           <View style={styles.navList}>{nav}</View>
@@ -73,7 +77,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <View style={[styles.topBar, { paddingTop: SPACING.sm + insets.top }]}>
         <View style={styles.topBarRow}>
           <View style={styles.topBarTitle}>
-            <Text style={styles.brand}>CHC ARTISTS</Text>
+            <View style={styles.brandRow}>
+              <Image source={BRAND_MARK} style={styles.brandLogoSmall} resizeMode="contain" accessible={false} />
+              <Text style={styles.brand}>CHC ARTISTS</Text>
+            </View>
             <Text style={styles.accountSmall} numberOfLines={1}>{account?.displayName || 'Creator workspace'}</Text>
           </View>
           {signOut}
@@ -90,6 +97,9 @@ const styles = StyleSheet.create({
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: COLORS.black },
   narrowRoot: { flex: 1, backgroundColor: COLORS.black },
   sidebar: { width: 240, padding: SPACING.lg, gap: SPACING.md, backgroundColor: '#0b0c0e', borderRightWidth: 1, borderRightColor: COLORS.border },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandLogo: { width: 46, height: 46 },
+  brandLogoSmall: { width: 34, height: 34 },
   brand: { color: COLORS.gold, fontWeight: '900', letterSpacing: 2, fontSize: 12 },
   account: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 20, lineHeight: 26 },
   accountSmall: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 17 },
