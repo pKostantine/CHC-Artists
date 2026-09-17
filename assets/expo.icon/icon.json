@@ -1,0 +1,25 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.00000,0.20784,0.40000,1.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "CHC_Artists.png",
+          "name": "CHC Artists"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}
