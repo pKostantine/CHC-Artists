@@ -2,12 +2,9 @@ name: Materialize CHC Artists branding assets
 
 on:
   push:
-    branches:
-      - main
-      - branding/chc-artists-logo
+    branches: [main]
     paths:
       - '.brand-assets/**'
-      - '.github/workflows/materialize-brand-assets.yml'
 
 permissions:
   contents: write
