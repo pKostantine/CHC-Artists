@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chc-artists",
+  "compatibility_date": "2026-09-16",
+  // Static-asset Worker: there is no server code, just the Expo web export.
+  // The app is a single-page application, so any path that is not a real file
+  // has to fall back to index.html rather than 404.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

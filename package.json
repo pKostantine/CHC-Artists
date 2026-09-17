@@ -8,6 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build": "expo export -p web",
+    "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -27,6 +29,7 @@
   },
   "devDependencies": {
     "@types/react": "19.2.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "wrangler": "^4.133.0"
   }
 }

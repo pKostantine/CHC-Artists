@@ -41,3 +41,35 @@ npm run web
 ```
 
 Use an authenticated CHC account with creator or admin access.
+
+## Deploy
+
+The site is a static Expo web export served by the `chc-artists` Worker
+(`wrangler.jsonc`), with the single-page fallback so any path serves the app
+rather than 404ing.
+
+```bash
+npm run build     # expo export -p web  ->  dist/
+npm run deploy    # builds, then wrangler deploy
+```
+
+Deploying from Cloudflare's Git integration instead: build command
+`npm run build`, output directory `dist`.
+
+### The four build-time variables are not optional
+
+`EXPO_PUBLIC_*` values are compiled into the bundle by `npm run build`, not
+read at runtime, so whatever machine builds the site must have them. They
+must therefore be set as **build** environment variables in Cloudflare, not
+only as runtime secrets:
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_CHC_MEDIA_BASE_URL`
+- `EXPO_PUBLIC_CHC_UPLOAD_URL`
+
+A build that runs without the two Supabase variables still succeeds and still
+deploys, but `src/services/supabase.ts` throws as the bundle loads and the
+page renders blank with `Missing EXPO_PUBLIC_SUPABASE_URL or
+EXPO_PUBLIC_SUPABASE_ANON_KEY` in the browser console. A blank page is worth
+checking there first.
