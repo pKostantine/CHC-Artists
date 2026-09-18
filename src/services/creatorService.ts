@@ -97,7 +97,7 @@ function contentTypeFor(file: UploadCandidate, blob: Blob): string {
 }
 
 const MULTIPART_THRESHOLD_BYTES = 48 * 1024 * 1024;
-const LEGACY_SAFE_SINGLE_PUT_BYTES = 90 * 1024 * 1024;
+const LEGACY_SAFE_SINGLE_PUT_BYTES = 99_000_000;
 
 interface MultipartPart {
   partNumber: number;
