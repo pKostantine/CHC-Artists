@@ -25,6 +25,7 @@ function freshCandidate(input: {
   mimeType: string;
   size: number;
   kind: keyof typeof PICKER_TYPES;
+  sourceFile?: any;
 }): UploadCandidate {
   const fallback: MediaKind = input.kind === 'image' ? 'image' : input.kind === 'audio' ? 'audio' : 'video';
   return {
@@ -33,6 +34,7 @@ function freshCandidate(input: {
     uri: input.uri,
     mimeType: input.mimeType,
     size: input.size,
+    sourceFile: input.sourceFile,
     mediaType: kindFor(input.mimeType, input.name, fallback),
     progress: 0,
     uploading: false,
@@ -61,6 +63,7 @@ export async function pickUploadCandidates(kind: keyof typeof PICKER_TYPES, mult
     mimeType: asset.mimeType || '',
     size: asset.size || 0,
     kind,
+    sourceFile: (asset as any).file,
   }));
 }
 
@@ -89,6 +92,7 @@ export function droppedUploadCandidates(files: any[], kind: keyof typeof PICKER_
       mimeType: String(file.type || ''),
       size: Number(file.size || 0),
       kind,
+      sourceFile: file,
     }));
 }
 
