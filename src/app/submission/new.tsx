@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { FileDropZone } from '@/components/FileDropZone';
 import { MediaPreview } from '@/components/MediaPreview';
+import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
 import { Banner, Button, Card, Chips, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -223,6 +225,45 @@ function TrackMetadata({ file, index, identityName, onChange }: {
   );
 }
 
+function TrackDragHandle({ onMove }: { onMove: (delta: -1 | 1) => void }) {
+  const lastStep = useRef(0);
+  const [dragging, setDragging] = useState(false);
+
+  const responder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      lastStep.current = 0;
+      setDragging(true);
+    },
+    onPanResponderMove: (_event, gesture) => {
+      const step = gesture.dy >= 0 ? Math.floor(gesture.dy / 56) : Math.ceil(gesture.dy / 56);
+      while (lastStep.current < step) {
+        onMove(1);
+        lastStep.current += 1;
+      }
+      while (lastStep.current > step) {
+        onMove(-1);
+        lastStep.current -= 1;
+      }
+    },
+    onPanResponderRelease: () => {
+      lastStep.current = 0;
+      setDragging(false);
+    },
+    onPanResponderTerminate: () => {
+      lastStep.current = 0;
+      setDragging(false);
+    },
+  }), [onMove]);
+
+  return (
+    <View {...responder.panHandlers} style={[styles.dragHandle, dragging && styles.dragHandleActive]}>
+      <Text style={styles.dragHandleText}>☰ Drag</Text>
+    </View>
+  );
+}
+
 function FileRow({ file, index, total, previewing, onPreview, onRetry, onRemove, onMove }: {
   file: UploadCandidate;
   index?: number;
@@ -248,6 +289,7 @@ function FileRow({ file, index, total, previewing, onPreview, onRetry, onRemove,
         <View style={styles.fileActions}>
           {onMove && index !== undefined && total !== undefined && (
             <>
+              <TrackDragHandle onMove={onMove} />
               <Pressable accessibilityLabel="Move up" disabled={index === 0} onPress={() => onMove(-1)} hitSlop={6}>
                 <Text style={[styles.order, index === 0 && styles.dim]}>↑</Text>
               </Pressable>
@@ -272,7 +314,7 @@ export default function NewSubmission() {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [credits, setCredits] = useState<CreditOptions | null>(null);
-  const [dragActive, setDragActive] = useState(false);
+  const earliestReleaseChoice = useMemo(() => new Date(Date.now() + 48 * 60 * 60 * 1000), []);
 
   useEffect(() => {
     if (!account) return;
@@ -334,11 +376,8 @@ export default function NewSubmission() {
     }
   }
 
-  function dropMedia(event: any) {
-    event.preventDefault?.();
-    setDragActive(false);
+  function receiveDroppedFiles(raw: any[]) {
     setSubmitError('');
-    const raw = Array.from(event.dataTransfer?.files ?? []) as any[];
     const kind = draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio';
     const picked = droppedUploadCandidates(raw, kind);
     if (!picked.length) {
@@ -350,19 +389,11 @@ export default function NewSubmission() {
     addMedia(picked);
   }
 
-  const dropProps = Platform.OS === 'web' ? ({
-    onDragEnter: (event: any) => { event.preventDefault?.(); setDragActive(true); },
-    onDragOver: (event: any) => { event.preventDefault?.(); setDragActive(true); },
-    onDragLeave: (event: any) => {
-      event.preventDefault?.();
-      if (!event.currentTarget?.contains?.(event.relatedTarget)) setDragActive(false);
-    },
-    onDrop: dropMedia,
-  } as any) : {};
-
-  function move(index: number, delta: -1 | 1) {
+  function move(fileId: string, delta: -1 | 1) {
     setDraft((current) => {
       const media = [...current.media];
+      const index = media.findIndex((file) => file.id === fileId);
+      if (index < 0) return current;
       const next = index + delta;
       if (next < 0 || next >= media.length) return current;
       [media[index], media[next]] = [media[next], media[index]];
@@ -438,19 +469,20 @@ export default function NewSubmission() {
 
             <View style={styles.group}>
               <Label>Release date</Label>
-              <Field
+              <ReleaseDateTimeField
                 label="CHC release date & time"
                 value={draft.scheduledReleaseAt}
-                onChangeText={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
-                placeholder="YYYY-MM-DD HH:MM"
+                onChange={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
+                minimumDate={earliestReleaseChoice}
                 hint="Uses your local time. Choose an exact time at least 48 hours from now so CHC has time to review it."
               />
-              <Field
+              <ReleaseDateTimeField
                 label="Originally released (optional)"
                 value={draft.originalReleaseDate}
-                onChangeText={(originalReleaseDate) => patch({ originalReleaseDate })}
-                placeholder="YYYY-MM-DD"
-                hint="If this already came out on SoundCloud, YouTube, Spotify or Apple Music, put that date here — it is the date listeners will see."
+                onChange={(originalReleaseDate) => patch({ originalReleaseDate })}
+                mode="date"
+                optional
+                hint="If this already came out on SoundCloud, YouTube, Spotify or Apple Music, choose that date here — it is the date listeners will see."
               />
             </View>
           </>
@@ -491,16 +523,10 @@ export default function NewSubmission() {
       </Card>
 
       <Card title="Artwork & media" description="Files upload privately as soon as you choose them. Nothing is sent to CHC review until you press Submit.">
-        {Platform.OS === 'web' && (
-          <View {...dropProps} style={[styles.dropZone, dragActive && styles.dropZoneActive]}>
-            <Text style={styles.dropTitle}>
-              {draft.mode === 'learning_lesson_set' ? 'Drag & drop lesson files' : 'Drag & drop audio files'}
-            </Text>
-            <Text style={uiStyles.muted}>
-              Drop multiple files at once. They will be added in the order provided by your browser.
-            </Text>
-          </View>
-        )}
+        <FileDropZone
+          kind={draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'}
+          onFiles={receiveDroppedFiles}
+        />
 
         <View style={uiStyles.actions}>
           <Button label={draft.artwork ? 'Replace artwork' : 'Choose artwork'} onPress={() => void pick('artwork')} />
@@ -527,7 +553,7 @@ export default function NewSubmission() {
               onPreview={() => setPreviewId(previewId === file.id ? null : file.id)}
               onRetry={() => uploadDraftFile(file)}
               onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
-              onMove={(delta) => move(index, delta)}
+              onMove={(delta) => move(file.id, delta)}
             />
             {isMusic && (
               <TrackMetadata
@@ -595,7 +621,7 @@ const styles = StyleSheet.create({
   creditsBody: { gap: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
   trackMetadata: { gap: SPACING.md, marginLeft: SPACING.md, marginBottom: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSoft },
   contributor: { gap: SPACING.sm, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  dropZone: { gap: 6, padding: SPACING.lg, borderRadius: RADII.md, borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.border, backgroundColor: COLORS.black },
-  dropZoneActive: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
-  dropTitle: { color: COLORS.white, fontWeight: '900', fontSize: 16 },
+  dragHandle: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: RADII.sm, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
+  dragHandleActive: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
+  dragHandleText: { color: COLORS.goldBright, fontWeight: '900', fontSize: 12 },
 });
