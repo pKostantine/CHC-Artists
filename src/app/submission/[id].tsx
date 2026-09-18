@@ -122,6 +122,18 @@ export default function SubmissionDetail() {
 
       {!!notice && <Banner tone="success">{notice}</Banner>}
 
+      {submission.submissionType === 'music_release' && (
+        <Card
+          title="Lyrics"
+          description="Lyrics are added after the music submission is created, not in the release description."
+        >
+          <Text style={uiStyles.muted}>
+            Open Lyrics Studio to add Coptic, Arabic, English, or French lyrics to each submitted track. You can start before publication; synchronized timing becomes available once the processed audio is attached.
+          </Text>
+          <Button kind="secondary" label="Open Lyrics Studio" onPress={() => router.push('/lyrics')} />
+        </Card>
+      )}
+
       <Card>
         <View style={styles.statusRow}>
           <StatusPill status={submission.status} />
