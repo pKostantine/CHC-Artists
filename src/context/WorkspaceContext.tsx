@@ -10,7 +10,9 @@ import { runUpload } from '@/utils/uploads';
 function defaultReleaseDate(): string {
   const date = new Date();
   date.setDate(date.getDate() + 3);
-  return date.toISOString().slice(0, 10);
+  date.setMinutes(0, 0, 0);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16).replace('T', ' ');
 }
 
 export const emptyDraft = (): CreatorDraft => ({
