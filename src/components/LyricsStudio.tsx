@@ -195,12 +195,12 @@ export function LyricsStudio() {
   if (!tracks.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <PageHeader title="Lyrics Studio" subtitle="Write and time synchronized lyrics for your published tracks." />
+        <PageHeader title="Lyrics Studio" subtitle="Add and time synchronized lyrics after submitting your music." />
         {message?.tone === 'error' ? (
           <Banner tone="error">{message.text}</Banner>
         ) : (
           <Banner tone="info">
-            No tracks are ready for lyrics yet. Once CHC publishes a music release from your submissions, its tracks appear here.
+            No submitted music tracks are ready yet. Submit a music release first; its tracks will appear here as soon as the submission creates them.
           </Banner>
         )}
       </ScrollView>
@@ -210,7 +210,7 @@ export function LyricsStudio() {
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <PageHeader title="Lyrics Studio" subtitle="Write and time synchronized lyrics for your published tracks." />
+        <PageHeader title="Lyrics Studio" subtitle="Add and time synchronized lyrics after submitting your music." />
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>Recording</Text>
           <View style={styles.trackList}>
