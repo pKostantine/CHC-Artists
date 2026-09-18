@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 
-function inputValue(value: string): string {
+function inputValue(value: string, mode: 'date' | 'datetime'): string {
+  if (mode === 'date') return value.trim().slice(0, 10);
   return value.trim().replace(' ', 'T').slice(0, 16);
 }
 
@@ -17,12 +18,14 @@ export function ReleaseDateTimeField({
   onChange,
   minimumDate,
   hint,
+  mode = 'datetime',
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   minimumDate?: Date;
   hint?: string;
+  mode?: 'date' | 'datetime';
 }) {
   return (
     <View style={{ gap: SPACING.sm }}>
@@ -31,10 +34,10 @@ export function ReleaseDateTimeField({
       </Text>
       <input
         aria-label={label}
-        type="datetime-local"
-        value={inputValue(value)}
+        type={mode === 'date' ? 'date' : 'datetime-local'}
+        value={inputValue(value, mode)}
         min={minValue(minimumDate)}
-        onChange={(event) => onChange(event.currentTarget.value.replace('T', ' '))}
+        onChange={(event) => onChange(mode === 'date' ? event.currentTarget.value : event.currentTarget.value.replace('T', ' '))}
         style={{
           width: '100%',
           boxSizing: 'border-box',
