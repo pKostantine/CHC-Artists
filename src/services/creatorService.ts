@@ -142,19 +142,22 @@ export const creatorService = {
 
   /** Creates the submission, its catalog record, and its items, then submits it — all in one transaction. */
   createSubmission(accountId: string, draft: CreatorDraft): Promise<{ submissionId: string; status: string }> {
+    const isMusic = draft.mode === 'music';
     const items = [
       ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
       ...draft.media.map((file) => ({
         uploadIntentId: file.uploadIntentId,
-        title: file.name,
+        title: isMusic ? file.title?.trim() : file.name,
         role: 'media',
-        // Omitted means the database credits the account's own identity.
-        mainArtistId: file.mainArtistId || null,
-        featuredArtistIds: file.featuredArtistIds?.length ? file.featuredArtistIds : [],
+        localizedTitles: isMusic ? (file.localizedTitle ?? {}) : {},
+        // Names are resolved to reusable catalogue artists by the backend.
+        mainArtistName: isMusic ? (file.mainArtistName?.trim() || null) : null,
+        contributors: isMusic
+          ? (file.contributors ?? []).map((credit) => ({ name: credit.name.trim(), role: credit.role }))
+          : [],
       })),
     ];
-    const isMusic = draft.mode === 'music';
-    return rpc('create_creator_submission', {
+    return rpc('create_creator_submission_v2', {
       p_creator_account_id: accountId,
       p_mode: draft.mode,
       p_title: draft.title,
