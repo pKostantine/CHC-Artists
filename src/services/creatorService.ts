@@ -174,6 +174,27 @@ export const creatorService = {
     });
   },
 
+  async enqueueUploadProcessing(uploadIntentId: string, mediaType: UploadCandidate['mediaType'], mode: CreatorDraft['mode']): Promise<void> {
+    const jobType = mediaType === 'image'
+      ? 'image_delivery'
+      : mediaType === 'video'
+        ? 'video_delivery'
+        : 'audio_delivery';
+    const outputBucket = mediaType === 'image'
+      ? 'chc-images'
+      : mediaType === 'video'
+        ? 'chc-learning'
+        : mode === 'music'
+          ? 'chc-music'
+          : 'chc-learning';
+
+    await rpc('enqueue_media_processing_job', {
+      p_upload_intent_id: uploadIntentId,
+      p_job_type: jobType,
+      p_output_bucket: outputBucket,
+    });
+  },
+
   creditOptions(accountId: string): Promise<CreditOptions> {
     return rpc<CreditOptions>('get_creator_credit_options', { p_creator_account_id: accountId });
   },

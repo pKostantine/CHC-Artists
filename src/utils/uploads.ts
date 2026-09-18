@@ -1,6 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { creatorService } from '@/services/creatorService';
-import type { MediaKind, UploadCandidate } from '@/types/creator';
+import type { CreatorDraft, MediaKind, UploadCandidate } from '@/types/creator';
 
 const PICKER_TYPES: Record<'audio' | 'video' | 'image' | 'lesson', string[]> = {
   audio: ['audio/*'],
@@ -96,13 +96,20 @@ export function droppedUploadCandidates(files: any[], kind: keyof typeof PICKER_
 export async function runUpload(
   accountId: string,
   file: UploadCandidate,
+  mode: CreatorDraft['mode'],
   patch: (id: string, change: Partial<UploadCandidate>) => void,
 ): Promise<void> {
   patch(file.id, { uploading: true, uploaded: false, uploadIntentId: undefined, error: undefined, progress: 0 });
   try {
     const uploadIntentId = await creatorService.upload(accountId, file, (progress) => {
-      patch(file.id, { progress, uploading: progress < 1 });
+      patch(file.id, { progress: Math.min(progress * 0.96, 0.96), uploading: true });
     });
+    patch(file.id, { uploadIntentId, progress: 0.97, uploading: true });
+    // Start delivery processing as soon as the upload lands in R2. By the time
+    // the artist finishes titles/credits and submits, compatible media is often
+    // already processed. Submission creation calls the same enqueue RPC again,
+    // which is idempotent and simply reuses this job.
+    await creatorService.enqueueUploadProcessing(uploadIntentId, file.mediaType, mode);
     patch(file.id, { uploadIntentId, uploaded: true, uploading: false, progress: 1, error: undefined });
   } catch (error) {
     patch(file.id, {

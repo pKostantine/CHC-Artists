@@ -126,8 +126,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       patchDraftFile(file.id, { error: 'Your creator workspace is still loading. Try again in a moment.' });
       return;
     }
-    void runUpload(accountId, file, patchDraftFile);
-  }, [accountId, patchDraftFile]);
+    void runUpload(accountId, file, draft.mode, patchDraftFile);
+  }, [accountId, draft.mode, patchDraftFile]);
 
   const value = useMemo<WorkspaceValue>(() => ({
     accounts,
