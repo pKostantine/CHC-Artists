@@ -19,6 +19,7 @@ export function ReleaseDateTimeField({
   minimumDate,
   hint,
   mode = 'datetime',
+  optional: _optional,
 }: {
   label: string;
   value: string;
@@ -26,6 +27,7 @@ export function ReleaseDateTimeField({
   minimumDate?: Date;
   hint?: string;
   mode?: 'date' | 'datetime';
+  optional?: boolean;
 }) {
   return (
     <View style={{ gap: SPACING.sm }}>
