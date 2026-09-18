@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MediaPreview } from '@/components/MediaPreview';
 import { Banner, Button, Card, Chips, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
-import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, UploadCandidate } from '@/types/creator';
+import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, TrackContributorRole, UploadCandidate } from '@/types/creator';
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
-import { pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
+import { droppedUploadCandidates, pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
 
 const MODES: { id: SubmissionMode; title: string }[] = [
   { id: 'music', title: 'Music release' },
@@ -18,7 +18,7 @@ const MODES: { id: SubmissionMode; title: string }[] = [
 ];
 
 const MODE_HELP: Record<SubmissionMode, string> = {
-  music: 'A single, EP, or album credited to one of your artists. Add audio tracks in order.',
+  music: 'A single, EP, or album. Add all audio tracks, name each track, then add its localized titles and credits.',
   learning_album: 'Full hymn recordings by a cantor for Learn & Study. Add audio recordings in order.',
   learning_lesson_set: 'Teaching lessons for one hymn. Add video or audio lessons in order.',
 };
@@ -89,32 +89,38 @@ function PersonPicker({ kind, options, value, onChange }: {
   );
 }
 
-/**
- * Per-song credits. The main artist is the account's own identity unless the
- * artist says otherwise, which is the case that matters for a cantor's
- * recording posted by someone else.
- */
-function TrackCredits({ file, options, onChange }: {
+const CONTRIBUTOR_ROLES: { id: TrackContributorRole; title: string }[] = [
+  { id: 'featured', title: 'Featured performer / vocals' },
+  { id: 'composer', title: 'Composer / music' },
+  { id: 'arranger', title: 'Arranger' },
+  { id: 'producer', title: 'Producer' },
+  { id: 'lyricist', title: 'Lyricist' },
+  { id: 'artwork', title: 'Track artwork' },
+];
+
+function TrackCredits({ file, identityName, onChange }: {
   file: UploadCandidate;
-  options: CreditOptions | null;
+  identityName: string;
   onChange: (change: Partial<UploadCandidate>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const contributors = file.contributors ?? [];
+  const mainName = file.mainArtistName?.trim() || identityName || 'Your artist profile';
 
-  const identity = options?.identityArtist ?? null;
-  const artists = options?.creditableArtists ?? [];
-  const mainId = file.mainArtistId || identity?.id || '';
-  const featured = file.featuredArtistIds ?? [];
-
-  const mainName = artists.find((a) => a.id === mainId)?.displayName ?? identity?.displayName ?? '—';
-  const featuredNames = featured
-    .map((id) => artists.find((a) => a.id === id)?.displayName)
-    .filter(Boolean)
-    .join(', ');
-
-  function toggleFeatured(id: string) {
+  function addContributor() {
     onChange({
-      featuredArtistIds: featured.includes(id) ? featured.filter((x) => x !== id) : [...featured, id],
+      contributors: [
+        ...contributors,
+        { id: `${Date.now()}-${contributors.length}`, name: '', role: 'featured' },
+      ],
+    });
+  }
+
+  function updateContributor(id: string, change: { name?: string; role?: TrackContributorRole }) {
+    onChange({
+      contributors: contributors.map((credit) => (
+        credit.id === id ? { ...credit, ...change } : credit
+      )),
     });
   }
 
@@ -122,47 +128,97 @@ function TrackCredits({ file, options, onChange }: {
     <View style={styles.credits}>
       <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={styles.addLink}>
         <Text style={uiStyles.link}>
-          {open ? 'Hide credits' : `Credits: ${mainName}${featuredNames ? ` feat. ${featuredNames}` : ''}`}
+          {open
+            ? 'Hide song credits'
+            : `Song credits: ${mainName}${contributors.length ? ` • ${contributors.length} contributor${contributors.length === 1 ? '' : 's'}` : ''}`}
         </Text>
       </Pressable>
 
       {open && (
         <View style={styles.creditsBody}>
-          <View style={styles.group}>
-            <Label>Main artist</Label>
-            <Chips
-              items={artists.map((a) => ({
-                id: a.id,
-                title: a.id === identity?.id ? `${a.displayName} (you)` : a.displayName,
-              }))}
-              value={mainId}
-              onChange={(id) => onChange({ mainArtistId: id === identity?.id ? undefined : id })}
-            />
-          </View>
+          <Field
+            label="Main artist"
+            value={file.mainArtistName ?? ''}
+            onChangeText={(mainArtistName) => onChange({ mainArtistName })}
+            placeholder={identityName || 'Artist name'}
+            hint={identityName
+              ? `Leave blank to use ${identityName}. Or type any artist name for this track.`
+              : 'Type the main artist name for this track.'}
+          />
 
           <View style={styles.group}>
-            <Label>Featured on this song</Label>
-            {artists.filter((a) => a.id !== mainId).length ? (
-              <View style={styles.featureRow}>
-                {artists.filter((a) => a.id !== mainId).map((a) => (
-                  <Pressable
-                    key={a.id}
-                    onPress={() => toggleFeatured(a.id)}
-                    accessibilityState={{ selected: featured.includes(a.id) }}
-                    style={[styles.featureChip, featured.includes(a.id) && styles.featureChipOn]}
-                  >
-                    <Text style={[styles.featureText, featured.includes(a.id) && styles.featureTextOn]}>
-                      {a.displayName}
-                    </Text>
-                  </Pressable>
-                ))}
+            <Label>Additional contributors</Label>
+            <Text style={uiStyles.muted}>
+              Add everyone who should be credited on this track, then choose what they did.
+            </Text>
+
+            {contributors.map((credit, index) => (
+              <View key={credit.id} style={styles.contributor}>
+                <Field
+                  label={`Contributor ${index + 1}`}
+                  value={credit.name}
+                  onChangeText={(name) => updateContributor(credit.id, { name })}
+                  placeholder="Type a name"
+                />
+                <View style={styles.group}>
+                  <Label>Role</Label>
+                  <Segmented
+                    items={CONTRIBUTOR_ROLES}
+                    value={credit.role}
+                    onChange={(role) => updateContributor(credit.id, { role: role as TrackContributorRole })}
+                  />
+                </View>
+                <Button
+                  kind="ghost"
+                  label="Remove contributor"
+                  onPress={() => onChange({ contributors: contributors.filter((x) => x.id !== credit.id) })}
+                />
               </View>
-            ) : (
-              <Text style={uiStyles.muted}>No one else to credit yet.</Text>
-            )}
+            ))}
+
+            <Button label="+ Add contributor" onPress={addContributor} />
           </View>
         </View>
       )}
+    </View>
+  );
+}
+
+function TrackMetadata({ file, index, identityName, onChange }: {
+  file: UploadCandidate;
+  index: number;
+  identityName: string;
+  onChange: (change: Partial<UploadCandidate>) => void;
+}) {
+  const localized = file.localizedTitle ?? { en: '', ar: '', cop: '', fr: '' };
+
+  return (
+    <View style={styles.trackMetadata}>
+      <Field
+        label={`Track ${index + 1} title`}
+        value={file.title ?? ''}
+        onChangeText={(title) => onChange({ title })}
+        placeholder="Required — enter the listener-facing track name"
+      />
+
+      <View style={styles.group}>
+        <Label>Localized track titles</Label>
+        <Text style={uiStyles.muted}>Optional. These belong to this track, not to the release title.</Text>
+        <View style={styles.localeGrid}>
+          {LOCALES.map(({ key, label }) => (
+            <View key={key} style={styles.localeField}>
+              <Field
+                label={label}
+                value={localized[key]}
+                onChangeText={(value) => onChange({ localizedTitle: { ...localized, [key]: value } })}
+                style={key === 'ar' ? styles.rtl : undefined}
+              />
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <TrackCredits file={file} identityName={identityName} onChange={onChange} />
     </View>
   );
 }
@@ -216,6 +272,7 @@ export default function NewSubmission() {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [credits, setCredits] = useState<CreditOptions | null>(null);
+  const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     if (!account) return;
@@ -242,11 +299,25 @@ export default function NewSubmission() {
   if (!isMusic && !draft.cantorId) problems.push('Choose or create a cantor.');
   if (draft.mode === 'learning_lesson_set' && !draft.hymnId) problems.push('Choose the hymn these lessons teach.');
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
+  if (isMusic) {
+    draft.media.forEach((file, index) => {
+      if (!file.title?.trim()) problems.push(`Add a title for track ${index + 1}.`);
+      if ((file.contributors ?? []).some((credit) => !credit.name.trim())) {
+        problems.push(`Fill in or remove the unnamed contributor on track ${index + 1}.`);
+      }
+    });
+  }
   if (draft.mode !== 'learning_lesson_set' && draft.media.some((f) => f.mediaType !== 'audio')) {
     problems.push('Only audio files can be added here. Remove the video files, or switch to Lesson set.');
   }
   const blocking = files.length ? uploadsBlocking(files) : null;
   if (blocking) problems.push(blocking);
+
+  function addMedia(picked: UploadCandidate[]) {
+    if (!picked.length) return;
+    setDraft((current) => ({ ...current, media: [...current.media, ...picked] }));
+    picked.forEach(uploadDraftFile);
+  }
 
   async function pick(kind: 'artwork' | 'media') {
     setSubmitError('');
@@ -257,11 +328,37 @@ export default function NewSubmission() {
     if (!picked.length) return;
     if (kind === 'artwork') {
       setDraft((current) => ({ ...current, artwork: picked[0] }));
+      picked.forEach(uploadDraftFile);
     } else {
-      setDraft((current) => ({ ...current, media: [...current.media, ...picked] }));
+      addMedia(picked);
     }
-    picked.forEach(uploadDraftFile);
   }
+
+  function dropMedia(event: any) {
+    event.preventDefault?.();
+    setDragActive(false);
+    setSubmitError('');
+    const raw = Array.from(event.dataTransfer?.files ?? []) as any[];
+    const kind = draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio';
+    const picked = droppedUploadCandidates(raw, kind);
+    if (!picked.length) {
+      setSubmitError(draft.mode === 'learning_lesson_set'
+        ? 'Drop audio or video lesson files here.'
+        : 'Drop supported audio files here.');
+      return;
+    }
+    addMedia(picked);
+  }
+
+  const dropProps = Platform.OS === 'web' ? ({
+    onDragEnter: (event: any) => { event.preventDefault?.(); setDragActive(true); },
+    onDragOver: (event: any) => { event.preventDefault?.(); setDragActive(true); },
+    onDragLeave: (event: any) => {
+      event.preventDefault?.();
+      if (!event.currentTarget?.contains?.(event.relatedTarget)) setDragActive(false);
+    },
+    onDrop: dropMedia,
+  } as any) : {};
 
   function move(index: number, delta: -1 | 1) {
     setDraft((current) => {
@@ -312,7 +409,14 @@ export default function NewSubmission() {
 
       <Card title="Details">
         <Field label="Title" value={draft.title} onChangeText={(title) => patch({ title })} placeholder="Shown to reviewers and, once published, to listeners" />
-        <Field label="Description" value={draft.description} onChangeText={(description) => patch({ description })} multiline placeholder="Optional notes about this recording" />
+        <Field
+          label="Description"
+          value={draft.description}
+          onChangeText={(description) => patch({ description })}
+          multiline
+          placeholder="Optional notes about this recording"
+          hint={isMusic ? 'Do not put lyrics here. After the submission is complete, add lyrics for each track in Lyrics Studio.' : undefined}
+        />
         {isMusic ? (
           <>
             <View style={styles.group}>
@@ -335,11 +439,11 @@ export default function NewSubmission() {
             <View style={styles.group}>
               <Label>Release date</Label>
               <Field
-                label="Goes live on CHC"
+                label="CHC release date & time"
                 value={draft.scheduledReleaseAt}
                 onChangeText={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
-                placeholder="YYYY-MM-DD"
-                hint="At least 48 hours from now, so CHC has time to review it."
+                placeholder="YYYY-MM-DD HH:MM"
+                hint="Uses your local time. Choose an exact time at least 48 hours from now so CHC has time to review it."
               />
               <Field
                 label="Originally released (optional)"
@@ -371,7 +475,7 @@ export default function NewSubmission() {
         )}
       </Card>
 
-      <Card title="Localized titles" description="Optional. Add the title in each language it should appear in.">
+      <Card title="Release localized titles" description="Optional. These are for the single, EP, or album title. Each music track has its own localized titles below.">
         <View style={styles.localeGrid}>
           {LOCALES.map(({ key, label }) => (
             <View key={key} style={styles.localeField}>
@@ -387,6 +491,17 @@ export default function NewSubmission() {
       </Card>
 
       <Card title="Artwork & media" description="Files upload privately as soon as you choose them. Nothing is sent to CHC review until you press Submit.">
+        {Platform.OS === 'web' && (
+          <View {...dropProps} style={[styles.dropZone, dragActive && styles.dropZoneActive]}>
+            <Text style={styles.dropTitle}>
+              {draft.mode === 'learning_lesson_set' ? 'Drag & drop lesson files' : 'Drag & drop audio files'}
+            </Text>
+            <Text style={uiStyles.muted}>
+              Drop multiple files at once. They will be added in the order provided by your browser.
+            </Text>
+          </View>
+        )}
+
         <View style={uiStyles.actions}>
           <Button label={draft.artwork ? 'Replace artwork' : 'Choose artwork'} onPress={() => void pick('artwork')} />
           <Button label={draft.mode === 'learning_lesson_set' ? 'Add lesson files' : 'Add audio files'} onPress={() => void pick('media')} />
@@ -415,9 +530,10 @@ export default function NewSubmission() {
               onMove={(delta) => move(index, delta)}
             />
             {isMusic && (
-              <TrackCredits
+              <TrackMetadata
                 file={file}
-                options={credits}
+                index={index}
+                identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
                 onChange={(change) => setDraft((current) => ({
                   ...current,
                   media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
@@ -477,9 +593,9 @@ const styles = StyleSheet.create({
   identity: { color: COLORS.goldBright, fontSize: 18, fontWeight: '900' },
   credits: { paddingLeft: SPACING.md, paddingBottom: SPACING.sm, gap: SPACING.sm },
   creditsBody: { gap: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
-  featureRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  featureChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADII.pill, borderWidth: 1, borderColor: COLORS.border },
-  featureChipOn: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
-  featureText: { color: COLORS.muted, fontWeight: '700', fontSize: 13 },
-  featureTextOn: { color: COLORS.goldBright },
+  trackMetadata: { gap: SPACING.md, marginLeft: SPACING.md, marginBottom: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSoft },
+  contributor: { gap: SPACING.sm, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  dropZone: { gap: 6, padding: SPACING.lg, borderRadius: RADII.md, borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.border, backgroundColor: COLORS.black },
+  dropZoneActive: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
+  dropTitle: { color: COLORS.white, fontWeight: '900', fontSize: 16 },
 });
