@@ -95,6 +95,7 @@ function contentTypeFor(file: UploadCandidate, blob: Blob): string {
 }
 
 const MULTIPART_THRESHOLD_BYTES = 48 * 1024 * 1024;
+const LEGACY_SAFE_SINGLE_PUT_BYTES = 90 * 1024 * 1024;
 
 interface MultipartPart {
   partNumber: number;
@@ -156,7 +157,12 @@ async function uploadMultipart(
     method: 'POST',
     headers: { Authorization: `Bearer ${access}` },
   });
-  if (!create.ok) throw await responseFailure(create, 'Could not start multipart upload');
+  if (!create.ok) {
+    if (create.status === 404 || create.status === 405) {
+      throw Object.assign(new Error('CHC multipart upload service is not available yet.'), { code: 'multipart_unavailable' });
+    }
+    throw await responseFailure(create, 'Could not start multipart upload');
+  }
 
   const setup = await create.json() as {
     uploadId?: string;
@@ -477,7 +483,23 @@ export const creatorService = {
     onProgress(0.12);
 
     if (blob.size >= MULTIPART_THRESHOLD_BYTES) {
-      await uploadMultipart(id, access, blob, onProgress);
+      try {
+        await uploadMultipart(id, access, blob, onProgress);
+      } catch (error) {
+        const multipartUnavailable = typeof error === 'object' && error && 'code' in error
+          && (error as { code?: string }).code === 'multipart_unavailable';
+        if (!multipartUnavailable || blob.size > LEGACY_SAFE_SINGLE_PUT_BYTES) throw error;
+
+        // Safe rollout fallback while the upload Worker deployment catches up.
+        await putBlob(
+          `${UPLOAD_BASE}/uploads/${id}`,
+          access,
+          blob,
+          contentType,
+          (loaded) => onProgress(0.12 + Math.min(1, loaded / blob.size) * 0.86),
+        );
+        onProgress(1);
+      }
     } else {
       await putBlob(
         `${UPLOAD_BASE}/uploads/${id}`,
