@@ -31,6 +31,14 @@ export interface CreditOptions {
   creditableArtists: CreditArtist[];
 }
 
+export type TrackContributorRole = 'featured' | 'composer' | 'lyricist' | 'arranger' | 'producer' | 'artwork';
+
+export interface TrackContributor {
+  id: string;
+  name: string;
+  role: TrackContributorRole;
+}
+
 export interface ArtistSocialLink { platform: string; url: string }
 
 export interface ArtistProfile {
@@ -118,9 +126,12 @@ export interface UploadCandidate {
   uploadIntentId?: string;
   uploaded?: boolean;
   error?: string;
-  /** Per-song credits. Empty means "the artist posting", which is the default. */
-  mainArtistId?: string;
-  featuredArtistIds?: string[];
+  /** Track metadata is intentionally independent of the uploaded filename. */
+  title?: string;
+  localizedTitle?: LocalizedMetadata;
+  /** Blank means the artist posting, which is the default. */
+  mainArtistName?: string;
+  contributors?: TrackContributor[];
 }
 
 export interface LocalizedMetadata { en: string; ar: string; cop: string; fr: string; }
