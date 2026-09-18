@@ -18,6 +18,32 @@ function kindFor(mimeType: string, name: string, fallback: MediaKind): MediaKind
   return fallback;
 }
 
+function freshCandidate(input: {
+  id: string;
+  name: string;
+  uri: string;
+  mimeType: string;
+  size: number;
+  kind: keyof typeof PICKER_TYPES;
+}): UploadCandidate {
+  const fallback: MediaKind = input.kind === 'image' ? 'image' : input.kind === 'audio' ? 'audio' : 'video';
+  return {
+    id: input.id,
+    name: input.name,
+    uri: input.uri,
+    mimeType: input.mimeType,
+    size: input.size,
+    mediaType: kindFor(input.mimeType, input.name, fallback),
+    progress: 0,
+    uploading: false,
+    uploaded: false,
+    title: '',
+    localizedTitle: { en: '', ar: '', cop: '', fr: '' },
+    mainArtistName: '',
+    contributors: [],
+  };
+}
+
 /** Opens the system picker and returns fresh, not-yet-uploaded candidates. */
 export async function pickUploadCandidates(kind: keyof typeof PICKER_TYPES, multiple: boolean): Promise<UploadCandidate[]> {
   const result = await DocumentPicker.getDocumentAsync({
@@ -28,18 +54,42 @@ export async function pickUploadCandidates(kind: keyof typeof PICKER_TYPES, mult
   if (result.canceled) return [];
 
   const stamp = Date.now();
-  const fallback: MediaKind = kind === 'image' ? 'image' : kind === 'audio' ? 'audio' : 'video';
-  return result.assets.map((asset, index) => ({
+  return result.assets.map((asset, index) => freshCandidate({
     id: `${stamp}-${index}-${asset.name}`,
     name: asset.name,
     uri: asset.uri,
     mimeType: asset.mimeType || '',
     size: asset.size || 0,
-    mediaType: kindFor(asset.mimeType || '', asset.name, fallback),
-    progress: 0,
-    uploading: false,
-    uploaded: false,
+    kind,
   }));
+}
+
+function dropMatches(kind: keyof typeof PICKER_TYPES, mimeType: string, name: string): boolean {
+  const audio = mimeType.startsWith('audio/') || /\.(mp3|m4a|wav|flac|aac|ogg|webm)$/i.test(name);
+  const video = mimeType.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(name);
+  const image = mimeType.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(name);
+  if (kind === 'audio') return audio;
+  if (kind === 'video') return video;
+  if (kind === 'image') return image;
+  return audio || video;
+}
+
+/** Converts browser drag-and-drop File objects into the same upload candidates as the picker. */
+export function droppedUploadCandidates(files: any[], kind: keyof typeof PICKER_TYPES): UploadCandidate[] {
+  const webUrl = (globalThis as any).URL;
+  if (!webUrl?.createObjectURL) return [];
+
+  const stamp = Date.now();
+  return files
+    .filter((file) => dropMatches(kind, String(file?.type || ''), String(file?.name || '')))
+    .map((file, index) => freshCandidate({
+      id: `${stamp}-drop-${index}-${file.name}`,
+      name: String(file.name),
+      uri: webUrl.createObjectURL(file),
+      mimeType: String(file.type || ''),
+      size: Number(file.size || 0),
+      kind,
+    }));
 }
 
 /** Uploads one file privately, reporting every state change through `patch`. */
