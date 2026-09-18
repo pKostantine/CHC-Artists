@@ -94,6 +94,167 @@ function contentTypeFor(file: UploadCandidate, blob: Blob): string {
   throw new Error(`Could not determine a supported media type for ${file.name}.`);
 }
 
+const MULTIPART_THRESHOLD_BYTES = 48 * 1024 * 1024;
+
+interface MultipartPart {
+  partNumber: number;
+  etag: string;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function putBlob(
+  url: string,
+  access: string,
+  blob: Blob,
+  contentType: string,
+  onProgress?: (loaded: number) => void,
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Authorization', `Bearer ${access}`);
+    xhr.setRequestHeader('Content-Type', contentType);
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(event.loaded);
+      };
+    }
+
+    xhr.onerror = () => reject(Object.assign(
+      new Error('Network error while uploading.'),
+      { status: 0 },
+    ));
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.responseText || '');
+        return;
+      }
+
+      const detail = xhr.responseText?.trim();
+      reject(Object.assign(
+        new Error(`Upload failed (${xhr.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`),
+        { status: xhr.status },
+      ));
+    };
+
+    xhr.send(blob);
+  });
+}
+
+async function uploadMultipart(
+  uploadIntentId: string,
+  access: string,
+  blob: Blob,
+  onProgress: (value: number) => void,
+): Promise<void> {
+  const create = await fetch(`${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${access}` },
+  });
+  if (!create.ok) throw await responseFailure(create, 'Could not start multipart upload');
+
+  const setup = await create.json() as {
+    uploadId?: string;
+    partSize?: number;
+    maxParallel?: number;
+  };
+  if (!setup.uploadId) throw new Error('Multipart upload did not return an upload ID.');
+
+  const uploadId = setup.uploadId;
+  const partSize = Math.max(5 * 1024 * 1024, Number(setup.partSize) || 32 * 1024 * 1024);
+  const partCount = Math.ceil(blob.size / partSize);
+  const parallel = Math.max(1, Math.min(6, Number(setup.maxParallel) || 4));
+  const loadedByPart = Array.from({ length: partCount }, () => 0);
+  const completedParts: MultipartPart[] = Array.from({ length: partCount });
+
+  function reportPartProgress(index: number, loaded: number) {
+    loadedByPart[index] = Math.max(loadedByPart[index], Math.min(loaded, partSize));
+    const uploaded = loadedByPart.reduce((sum, value) => sum + value, 0);
+    onProgress(0.12 + Math.min(1, uploaded / blob.size) * 0.82);
+  }
+
+  async function uploadOne(index: number): Promise<void> {
+    const start = index * partSize;
+    const end = Math.min(blob.size, start + partSize);
+    const chunk = blob.slice(start, end);
+    const partNumber = index + 1;
+    const endpoint = `${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart/${encodeURIComponent(uploadId)}/parts/${partNumber}`;
+
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        const responseText = await putBlob(
+          endpoint,
+          access,
+          chunk,
+          'application/octet-stream',
+          (loaded) => reportPartProgress(index, loaded),
+        );
+        const body = JSON.parse(responseText || '{}') as MultipartPart;
+        if (!body.etag || body.partNumber !== partNumber) {
+          throw new Error(`CHC returned an invalid response for part ${partNumber}.`);
+        }
+        loadedByPart[index] = chunk.size;
+        completedParts[index] = body;
+        reportPartProgress(index, chunk.size);
+        return;
+      } catch (error) {
+        lastError = error;
+        const status = typeof error === 'object' && error && 'status' in error
+          ? Number((error as { status?: number }).status)
+          : 0;
+        const retryable = status === 0 || status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+        if (!retryable || attempt === 3) break;
+        await sleep(400 * 2 ** attempt);
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`Part ${partNumber} failed to upload.`);
+  }
+
+  let nextPart = 0;
+  async function worker() {
+    while (true) {
+      const index = nextPart;
+      nextPart += 1;
+      if (index >= partCount) return;
+      await uploadOne(index);
+    }
+  }
+
+  try {
+    await Promise.all(Array.from({ length: Math.min(parallel, partCount) }, () => worker()));
+    onProgress(0.96);
+
+    const complete = await fetch(
+      `${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart/${encodeURIComponent(uploadId)}/complete`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${access}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ parts: completedParts }),
+      },
+    );
+    if (!complete.ok) throw await responseFailure(complete, 'Could not finish multipart upload');
+    onProgress(1);
+  } catch (error) {
+    await fetch(
+      `${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart/${encodeURIComponent(uploadId)}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${access}` },
+      },
+    ).catch(() => undefined);
+    throw error;
+  }
+}
+
 /** The upload worker answers with {"error": code, "message": text}. */
 async function responseFailure(response: Response, label: string): Promise<Error> {
   let detail = '';
@@ -277,11 +438,19 @@ export const creatorService = {
     const access = await token();
     onProgress(0.02);
 
-    // Read the actual picked file first. Browser/mobile pickers can report a zero
-    // or rounded size, while the backend intentionally requires an exact byte count.
-    const source = await fetch(file.uri);
-    if (!source.ok) throw new Error(`Could not read ${file.name} (${source.status}).`);
-    const blob = await source.blob();
+    // Web drag/drop and DocumentPicker give us a real File object. Keep it as a
+    // Blob so large files can be sliced into multipart chunks without first
+    // copying the whole thing into JS memory. Native file URIs fall back to
+    // reading a Blob from the local picker URI.
+    let blob: Blob;
+    if (file.sourceFile && typeof file.sourceFile.slice === 'function' && Number(file.sourceFile.size) > 0) {
+      blob = file.sourceFile as Blob;
+    } else {
+      const source = await fetch(file.uri);
+      if (!source.ok) throw new Error(`Could not read ${file.name} (${source.status}).`);
+      blob = await source.blob();
+    }
+
     if (!blob.size) throw new Error(`${file.name} is empty or could not be read.`);
     const contentType = contentTypeFor(file, blob);
     onProgress(0.06);
@@ -307,29 +476,19 @@ export const creatorService = {
     if (!id) throw new Error('Upload authorization did not return an upload ID.');
     onProgress(0.12);
 
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', `${UPLOAD_BASE}/uploads/${id}`);
-      xhr.setRequestHeader('Authorization', `Bearer ${access}`);
-      xhr.setRequestHeader('Content-Type', contentType);
-      if (xhr.upload) {
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) onProgress(0.12 + (event.loaded / event.total) * 0.86);
-        };
-      }
-      xhr.onerror = () => reject(new Error(`Network error while uploading ${file.name}.`));
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-          return;
-        }
-        const detail = xhr.responseText?.trim();
-        reject(new Error(`Upload failed (${xhr.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`));
-      };
-      xhr.send(blob);
-    });
+    if (blob.size >= MULTIPART_THRESHOLD_BYTES) {
+      await uploadMultipart(id, access, blob, onProgress);
+    } else {
+      await putBlob(
+        `${UPLOAD_BASE}/uploads/${id}`,
+        access,
+        blob,
+        contentType,
+        (loaded) => onProgress(0.12 + Math.min(1, loaded / blob.size) * 0.86),
+      );
+      onProgress(1);
+    }
 
-    onProgress(1);
     return id;
   },
 
