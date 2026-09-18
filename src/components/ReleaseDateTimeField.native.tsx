@@ -8,19 +8,16 @@ function parseLocal(value: string): Date {
   return Number.isNaN(parsed.getTime()) ? new Date(Date.now() + 72 * 60 * 60 * 1000) : parsed;
 }
 
-function formatLocal(date: Date): string {
+function formatLocal(date: Date, mode: 'date' | 'datetime'): string {
   const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const datePart = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return mode === 'date' ? datePart : `${datePart} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function displayValue(date: Date): string {
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+function displayValue(date: Date, mode: 'date' | 'datetime'): string {
+  return date.toLocaleString(undefined, mode === 'date'
+    ? { year: 'numeric', month: 'short', day: 'numeric' }
+    : { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 export function ReleaseDateTimeField({
@@ -29,12 +26,14 @@ export function ReleaseDateTimeField({
   onChange,
   minimumDate,
   hint,
+  mode = 'datetime',
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   minimumDate?: Date;
   hint?: string;
+  mode?: 'date' | 'datetime';
 }) {
   const [showAndroidPicker, setShowAndroidPicker] = useState(false);
   const date = parseLocal(value);
@@ -46,28 +45,28 @@ export function ReleaseDateTimeField({
       {Platform.OS === 'ios' ? (
         <DateTimePicker
           value={date}
-          mode="datetime"
+          mode={mode}
           display="compact"
           minimumDate={minimumDate}
           themeVariant="dark"
           accentColor={COLORS.gold}
-          onValueChange={(_event, selectedDate) => onChange(formatLocal(selectedDate))}
+          onValueChange={(_event, selectedDate) => onChange(formatLocal(selectedDate, mode))}
         />
       ) : (
         <>
           <Pressable style={styles.button} onPress={() => setShowAndroidPicker(true)}>
-            <Text style={styles.buttonText}>{displayValue(date)}</Text>
+            <Text style={styles.buttonText}>{displayValue(date, mode)}</Text>
           </Pressable>
           {showAndroidPicker && (
             <DateTimePicker
               value={date}
-              mode="datetime"
+              mode={mode}
               minimumDate={minimumDate}
               presentation="dialog"
               accentColor={COLORS.gold}
               onValueChange={(_event, selectedDate) => {
                 setShowAndroidPicker(false);
-                onChange(formatLocal(selectedDate));
+                onChange(formatLocal(selectedDate, mode));
               }}
               onDismiss={() => setShowAndroidPicker(false)}
             />
