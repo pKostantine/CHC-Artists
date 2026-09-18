@@ -481,6 +481,7 @@ export default function NewSubmission() {
                 value={draft.originalReleaseDate}
                 onChange={(originalReleaseDate) => patch({ originalReleaseDate })}
                 mode="date"
+                optional
                 hint="If this already came out on SoundCloud, YouTube, Spotify or Apple Music, choose that date here — it is the date listeners will see."
               />
             </View>
