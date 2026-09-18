@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { File as ExpoFile } from 'expo-file-system';
 import { supabase } from '@/services/supabase';
 import type {
   CatalogOption,
@@ -451,6 +453,12 @@ export const creatorService = {
     let blob: Blob;
     if (file.sourceFile && typeof file.sourceFile.slice === 'function' && Number(file.sourceFile.size) > 0) {
       blob = file.sourceFile as Blob;
+    } else if (Platform.OS !== 'web') {
+      const nativeFile = new ExpoFile(file.uri);
+      if (!nativeFile.exists || !nativeFile.size) throw new Error(`${file.name} is empty or could not be read.`);
+      // Expo File implements Blob, so multipart slice() reads only the requested
+      // range instead of materializing a multi-hundred-megabyte file in JS.
+      blob = nativeFile as unknown as Blob;
     } else {
       const source = await fetch(file.uri);
       if (!source.ok) throw new Error(`Could not read ${file.name} (${source.status}).`);
