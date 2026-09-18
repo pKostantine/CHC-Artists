@@ -5,12 +5,33 @@ import type {
   CreatorAccount,
   CreatorDashboardData,
   CreatorDraft,
+  ArtistProfile,
+  ArtistSocialLink,
+  CreatorRelease,
+  CreditOptions,
   SubmissionItem,
   SubmissionItemRole,
   UploadCandidate,
 } from '@/types/creator';
 
 const UPLOAD_BASE = process.env.EXPO_PUBLIC_CHC_UPLOAD_URL || 'https://chc-upload-authorizer.hrmpdd8d6c.workers.dev';
+
+function nullIfBlank(value: string | null | undefined): string | null {
+  return value && value.trim() ? value.trim() : null;
+}
+
+/**
+ * Accepts what the date fields actually contain — "2026-10-01" or
+ * "2026-10-01 18:30" — and hands the database a real timestamp. Anything it
+ * cannot read becomes null rather than an invalid date.
+ */
+function toIsoOrNull(value: string | null | undefined): string | null {
+  const trimmed = nullIfBlank(value);
+  if (!trimmed) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? `${trimmed}T12:00` : trimmed.replace(' ', 'T');
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   aac: 'audio/aac',
@@ -123,7 +144,14 @@ export const creatorService = {
   createSubmission(accountId: string, draft: CreatorDraft): Promise<{ submissionId: string; status: string }> {
     const items = [
       ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
-      ...draft.media.map((file) => ({ uploadIntentId: file.uploadIntentId, title: file.name, role: 'media' })),
+      ...draft.media.map((file) => ({
+        uploadIntentId: file.uploadIntentId,
+        title: file.name,
+        role: 'media',
+        // Omitted means the database credits the account's own identity.
+        mainArtistId: file.mainArtistId || null,
+        featuredArtistIds: file.featuredArtistIds?.length ? file.featuredArtistIds : [],
+      })),
     ];
     const isMusic = draft.mode === 'music';
     return rpc('create_creator_submission', {
@@ -138,6 +166,68 @@ export const creatorService = {
       p_hymn_id: draft.mode === 'learning_lesson_set' ? draft.hymnId || null : null,
       p_localized_titles: draft.localizedTitle,
       p_items: items,
+      p_scheduled_release_at: isMusic ? toIsoOrNull(draft.scheduledReleaseAt) : null,
+      p_original_release_date: isMusic ? nullIfBlank(draft.originalReleaseDate) : null,
+    });
+  },
+
+  creditOptions(accountId: string): Promise<CreditOptions> {
+    return rpc<CreditOptions>('get_creator_credit_options', { p_creator_account_id: accountId });
+  },
+
+  artistProfile(accountId: string): Promise<ArtistProfile> {
+    return rpc<ArtistProfile>('get_creator_artist_profile', { p_creator_account_id: accountId });
+  },
+
+  updateArtistProfile(accountId: string, patch: {
+    displayName?: string | null;
+    sortName?: string | null;
+    biography?: string | null;
+    socialLinks?: ArtistSocialLink[] | null;
+    pinnedReleaseIds?: string[] | null;
+    profileImageUploadIntentId?: string | null;
+  }): Promise<ArtistProfile> {
+    return rpc<ArtistProfile>('update_creator_artist_profile', {
+      p_creator_account_id: accountId,
+      p_display_name: patch.displayName ?? null,
+      p_sort_name: patch.sortName ?? null,
+      p_biography: patch.biography ?? null,
+      p_social_links: patch.socialLinks ?? null,
+      p_pinned_release_ids: patch.pinnedReleaseIds ?? null,
+      p_profile_image_upload_intent_id: patch.profileImageUploadIntentId ?? null,
+    });
+  },
+
+  release(releaseId: string): Promise<CreatorRelease> {
+    return rpc<CreatorRelease>('get_creator_release', { p_release_id: releaseId });
+  },
+
+  updateRelease(releaseId: string, patch: {
+    title?: string | null;
+    description?: string | null;
+    scheduledReleaseAt?: string | null;
+    originalReleaseDate?: string | null;
+    clearOriginalReleaseDate?: boolean;
+    localizedTitles?: Record<string, string> | null;
+    tracks?: {
+      id?: string;
+      uploadIntentId?: string;
+      title?: string;
+      mainArtistId?: string | null;
+      featuredArtistIds?: string[];
+    }[] | null;
+    coverUploadIntentId?: string | null;
+  }): Promise<CreatorRelease> {
+    return rpc<CreatorRelease>('update_creator_release', {
+      p_release_id: releaseId,
+      p_title: patch.title ?? null,
+      p_description: patch.description ?? null,
+      p_scheduled_release_at: patch.scheduledReleaseAt ? toIsoOrNull(patch.scheduledReleaseAt) : null,
+      p_original_release_date: nullIfBlank(patch.originalReleaseDate ?? ''),
+      p_clear_original_release_date: Boolean(patch.clearOriginalReleaseDate),
+      p_localized_titles: patch.localizedTitles ?? null,
+      p_tracks: patch.tracks ?? null,
+      p_cover_upload_intent_id: patch.coverUploadIntentId ?? null,
     });
   },
 

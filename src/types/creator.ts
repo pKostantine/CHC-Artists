@@ -23,6 +23,59 @@ export interface CreatorSubmission {
 
 export interface CatalogOption { id: string; title: string; subtitle?: string | null; }
 
+export interface CreditArtist { id: string; displayName: string; isCreditOnly?: boolean }
+
+export interface CreditOptions {
+  /** The artist this account releases as. Every track defaults to it. */
+  identityArtist: CreditArtist | null;
+  creditableArtists: CreditArtist[];
+}
+
+export interface ArtistSocialLink { platform: string; url: string }
+
+export interface ArtistProfile {
+  id: string;
+  displayName: string;
+  sortName: string | null;
+  biography: string | null;
+  publicationStatus: PublicationStatus;
+  profileImage: { assetId: string; bucket: string; path: string } | null;
+  /** Set while a newly uploaded picture is still being processed. */
+  profileImagePending: string | null;
+  socialLinks: ArtistSocialLink[];
+  pinnedReleases: { id: string; title: string; releaseType: ReleaseType; publicationStatus: PublicationStatus }[];
+  releases: { id: string; title: string; releaseType: ReleaseType; publicationStatus: PublicationStatus; displayDate: string | null }[];
+}
+
+export interface ReleaseTrack {
+  id: string;
+  trackNumber: number;
+  discNumber: number;
+  title: string;
+  durationMs: number | null;
+  publicationStatus: PublicationStatus;
+  hasMedia: boolean;
+  mainArtist: CreditArtist | null;
+  featuredArtists: CreditArtist[];
+}
+
+export interface CreatorRelease {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  releaseType: ReleaseType;
+  publicationStatus: PublicationStatus;
+  scheduledReleaseAt: string | null;
+  originalReleaseDate: string | null;
+  displayDate: string | null;
+  earliestReleaseAt: string;
+  primaryArtist: CreditArtist | null;
+  cover: { assetId: string; bucket: string; path: string } | null;
+  localizations: { locale: string; title: string }[];
+  tracks: ReleaseTrack[];
+}
+
 export interface CreatorDashboardData {
   submissions: CreatorSubmission[];
   artists: CatalogOption[];
@@ -65,6 +118,9 @@ export interface UploadCandidate {
   uploadIntentId?: string;
   uploaded?: boolean;
   error?: string;
+  /** Per-song credits. Empty means "the artist posting", which is the default. */
+  mainArtistId?: string;
+  featuredArtistIds?: string[];
 }
 
 export interface LocalizedMetadata { en: string; ar: string; cop: string; fr: string; }
@@ -81,4 +137,8 @@ export interface CreatorDraft {
   localizedTitle: LocalizedMetadata;
   artwork?: UploadCandidate;
   media: UploadCandidate[];
+  /** When this goes live on CHC. Must be at least 48 hours out. */
+  scheduledReleaseAt: string;
+  /** When it came out elsewhere, if it did. Wins over the CHC date on display. */
+  originalReleaseDate: string;
 }

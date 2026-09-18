@@ -3,6 +3,16 @@ import { creatorService } from '@/services/creatorService';
 import type { CatalogOption, CatalogOptions, CreatorAccount, CreatorDashboardData, CreatorDraft, UploadCandidate } from '@/types/creator';
 import { runUpload } from '@/utils/uploads';
 
+/**
+ * A release cannot go out inside 48 hours, so the form opens on the third day
+ * rather than on a date the database will reject.
+ */
+function defaultReleaseDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 3);
+  return date.toISOString().slice(0, 10);
+}
+
 export const emptyDraft = (): CreatorDraft => ({
   mode: 'music',
   title: '',
@@ -14,6 +24,8 @@ export const emptyDraft = (): CreatorDraft => ({
   hymnId: '',
   localizedTitle: { en: '', ar: '', cop: '', fr: '' },
   media: [],
+  scheduledReleaseAt: defaultReleaseDate(),
+  originalReleaseDate: '',
 });
 
 const EMPTY_DASHBOARD: CreatorDashboardData = { submissions: [], artists: [], cantors: [] };

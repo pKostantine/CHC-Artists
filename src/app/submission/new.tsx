@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MediaPreview } from '@/components/MediaPreview';
@@ -6,7 +6,7 @@ import { Banner, Button, Card, Chips, Field, Label, Page, PageHeader, Segmented,
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
-import type { CatalogOption, CreatorDraft, SubmissionMode, UploadCandidate } from '@/types/creator';
+import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, UploadCandidate } from '@/types/creator';
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
@@ -89,6 +89,84 @@ function PersonPicker({ kind, options, value, onChange }: {
   );
 }
 
+/**
+ * Per-song credits. The main artist is the account's own identity unless the
+ * artist says otherwise, which is the case that matters for a cantor's
+ * recording posted by someone else.
+ */
+function TrackCredits({ file, options, onChange }: {
+  file: UploadCandidate;
+  options: CreditOptions | null;
+  onChange: (change: Partial<UploadCandidate>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const identity = options?.identityArtist ?? null;
+  const artists = options?.creditableArtists ?? [];
+  const mainId = file.mainArtistId || identity?.id || '';
+  const featured = file.featuredArtistIds ?? [];
+
+  const mainName = artists.find((a) => a.id === mainId)?.displayName ?? identity?.displayName ?? '—';
+  const featuredNames = featured
+    .map((id) => artists.find((a) => a.id === id)?.displayName)
+    .filter(Boolean)
+    .join(', ');
+
+  function toggleFeatured(id: string) {
+    onChange({
+      featuredArtistIds: featured.includes(id) ? featured.filter((x) => x !== id) : [...featured, id],
+    });
+  }
+
+  return (
+    <View style={styles.credits}>
+      <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={styles.addLink}>
+        <Text style={uiStyles.link}>
+          {open ? 'Hide credits' : `Credits: ${mainName}${featuredNames ? ` feat. ${featuredNames}` : ''}`}
+        </Text>
+      </Pressable>
+
+      {open && (
+        <View style={styles.creditsBody}>
+          <View style={styles.group}>
+            <Label>Main artist</Label>
+            <Chips
+              items={artists.map((a) => ({
+                id: a.id,
+                title: a.id === identity?.id ? `${a.displayName} (you)` : a.displayName,
+              }))}
+              value={mainId}
+              onChange={(id) => onChange({ mainArtistId: id === identity?.id ? undefined : id })}
+            />
+          </View>
+
+          <View style={styles.group}>
+            <Label>Featured on this song</Label>
+            {artists.filter((a) => a.id !== mainId).length ? (
+              <View style={styles.featureRow}>
+                {artists.filter((a) => a.id !== mainId).map((a) => (
+                  <Pressable
+                    key={a.id}
+                    onPress={() => toggleFeatured(a.id)}
+                    accessibilityState={{ selected: featured.includes(a.id) }}
+                    style={[styles.featureChip, featured.includes(a.id) && styles.featureChipOn]}
+                  >
+                    <Text style={[styles.featureText, featured.includes(a.id) && styles.featureTextOn]}>
+                      {a.displayName}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : (
+              <Text style={uiStyles.muted}>No one else to credit yet.</Text>
+            )}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
 function FileRow({ file, index, total, previewing, onPreview, onRetry, onRemove, onMove }: {
   file: UploadCandidate;
   index?: number;
@@ -137,6 +215,17 @@ export default function NewSubmission() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [credits, setCredits] = useState<CreditOptions | null>(null);
+
+  useEffect(() => {
+    if (!account) return;
+    let cancelled = false;
+    void creatorService
+      .creditOptions(account.id)
+      .then((options) => { if (!cancelled) setCredits(options); })
+      .catch(() => { if (!cancelled) setCredits(null); });
+    return () => { cancelled = true; };
+  }, [account]);
 
   const patch = (change: Partial<CreatorDraft>) => {
     setSubmitError('');
@@ -149,7 +238,7 @@ export default function NewSubmission() {
   const problems: string[] = [];
   if (!account) problems.push('Your creator workspace is still loading.');
   if (!draft.title.trim()) problems.push('Add a title.');
-  if (isMusic && !draft.artistId) problems.push('Choose or create an artist.');
+  if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
   if (!isMusic && !draft.cantorId) problems.push('Choose or create a cantor.');
   if (draft.mode === 'learning_lesson_set' && !draft.hymnId) problems.push('Choose the hymn these lessons teach.');
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
@@ -234,7 +323,32 @@ export default function NewSubmission() {
                 onChange={(releaseType) => patch({ releaseType: releaseType as CreatorDraft['releaseType'] })}
               />
             </View>
-            <PersonPicker kind="artist" options={dashboard.artists} value={draft.artistId} onChange={(artistId) => patch({ artistId })} />
+            <View style={styles.group}>
+              <Label>Released as</Label>
+              <Text style={styles.identity}>{credits?.identityArtist?.displayName ?? account?.displayName ?? '—'}</Text>
+              <Text style={uiStyles.muted}>
+                Your account releases under your own name. To credit someone else on a particular
+                song, set that song&apos;s main artist below.
+              </Text>
+            </View>
+
+            <View style={styles.group}>
+              <Label>Release date</Label>
+              <Field
+                label="Goes live on CHC"
+                value={draft.scheduledReleaseAt}
+                onChangeText={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
+                placeholder="YYYY-MM-DD"
+                hint="At least 48 hours from now, so CHC has time to review it."
+              />
+              <Field
+                label="Originally released (optional)"
+                value={draft.originalReleaseDate}
+                onChangeText={(originalReleaseDate) => patch({ originalReleaseDate })}
+                placeholder="YYYY-MM-DD"
+                hint="If this already came out on SoundCloud, YouTube, Spotify or Apple Music, put that date here — it is the date listeners will see."
+              />
+            </View>
           </>
         ) : (
           <>
@@ -289,17 +403,28 @@ export default function NewSubmission() {
         )}
 
         {draft.media.map((file, index) => (
-          <FileRow
-            key={file.id}
-            file={file}
-            index={index}
-            total={draft.media.length}
-            previewing={previewId === file.id}
-            onPreview={() => setPreviewId(previewId === file.id ? null : file.id)}
-            onRetry={() => uploadDraftFile(file)}
-            onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
-            onMove={(delta) => move(index, delta)}
-          />
+          <View key={file.id}>
+            <FileRow
+              file={file}
+              index={index}
+              total={draft.media.length}
+              previewing={previewId === file.id}
+              onPreview={() => setPreviewId(previewId === file.id ? null : file.id)}
+              onRetry={() => uploadDraftFile(file)}
+              onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
+              onMove={(delta) => move(index, delta)}
+            />
+            {isMusic && (
+              <TrackCredits
+                file={file}
+                options={credits}
+                onChange={(change) => setDraft((current) => ({
+                  ...current,
+                  media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
+                }))}
+              />
+            )}
+          </View>
         ))}
 
         {!files.length && <Text style={uiStyles.muted}>No files yet.</Text>}
@@ -349,4 +474,12 @@ const styles = StyleSheet.create({
   requirements: { gap: 4, padding: 12, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADII.sm, backgroundColor: COLORS.black },
   requirementsTitle: { color: COLORS.white, fontWeight: '800', fontSize: 13 },
   submit: { minWidth: 180 },
+  identity: { color: COLORS.goldBright, fontSize: 18, fontWeight: '900' },
+  credits: { paddingLeft: SPACING.md, paddingBottom: SPACING.sm, gap: SPACING.sm },
+  creditsBody: { gap: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
+  featureRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  featureChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADII.pill, borderWidth: 1, borderColor: COLORS.border },
+  featureChipOn: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
+  featureText: { color: COLORS.muted, fontWeight: '700', fontSize: 13 },
+  featureTextOn: { color: COLORS.goldBright },
 });

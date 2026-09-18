@@ -9,6 +9,7 @@ import { supabase } from '@/services/supabase';
 const SECTIONS: { href: Href; match: string; label: string; description: string }[] = [
   { href: '/submission', match: '/submission', label: 'Submissions', description: 'Releases, albums & lessons' },
   { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', description: 'Synchronized lyrics' },
+  { href: '/profile', match: '/profile', label: 'Artist profile', description: 'Picture, bio & links' },
 ];
 
 const WIDE = 900;
