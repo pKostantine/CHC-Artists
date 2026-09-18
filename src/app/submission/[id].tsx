@@ -12,9 +12,23 @@ import { pickUploadCandidates, runUpload, uploadsBlocking } from '@/utils/upload
 
 function itemState(item: SubmissionItem): string {
   if (item.mediaAssetId) return 'Processed';
+
+  // A queued job that has already been attempted is a retry, not a fresh wait,
+  // and saying so is the difference between "slow" and "going wrong".
+  if (item.processingStatus === 'queued' && (item.processingAttemptCount ?? 0) > 0) {
+    return `Retrying (attempt ${(item.processingAttemptCount ?? 0) + 1} of ${item.processingMaxAttempts ?? '?'})`;
+  }
+
   if (item.processingStatus) return `Processing: ${statusLabel(item.processingStatus)}`;
   if (item.uploadStatus) return statusLabel(item.uploadStatus);
   return '—';
+}
+
+function itemRoleLabel(item: SubmissionItem): string {
+  if (item.role === 'artwork') return 'Artwork';
+  if (item.role === 'lesson') return 'Lesson media';
+  if (item.role === 'track') return 'Track';
+  return item.mediaType ? statusLabel(item.mediaType) : 'File';
 }
 
 export default function SubmissionDetail() {
@@ -76,7 +90,13 @@ export default function SubmissionDetail() {
       // New files continue the existing ordering rather than renumbering from zero.
       let order = items?.length ?? 0;
       for (const file of added) {
-        await creatorService.attachUpload(submission.id, file.uploadIntentId!, file.name, order);
+        await creatorService.attachUpload(
+          submission.id,
+          file.uploadIntentId!,
+          file.name,
+          order,
+          submission.submissionType === 'music_release' ? 'track' : 'lesson',
+        );
         // Once attached, a retry must not attach it again.
         setAdded((current) => current.filter((x) => x.id !== file.id));
         order += 1;
@@ -133,8 +153,11 @@ export default function SubmissionDetail() {
               <View style={styles.fileText}>
                 <Text style={uiStyles.rowTitle}>{item.sortOrder + 1}. {item.title || 'Untitled file'}</Text>
                 <Text style={uiStyles.muted}>
-                  {item.mediaType ? statusLabel(item.mediaType) : 'File'} • {fileSize(item.contentLength ?? 0)} • {itemState(item)}
+                  {itemRoleLabel(item)} • {fileSize(item.contentLength ?? 0)} • {itemState(item)}
                 </Text>
+                {item.processingStatus === 'failed' && item.processingError ? (
+                  <Text style={styles.itemError}>{item.processingError}</Text>
+                ) : null}
               </View>
             </View>
           ))
@@ -195,5 +218,6 @@ const styles = StyleSheet.create({
   notesTitle: { color: '#ffc36b', fontWeight: '900' },
   notesBody: { color: COLORS.white, lineHeight: 21 },
   fileText: { flex: 1, minWidth: 200, gap: 3 },
+  itemError: { color: COLORS.danger, fontSize: 12, lineHeight: 17 },
   fileActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
 });

@@ -6,6 +6,7 @@ import type {
   CreatorDashboardData,
   CreatorDraft,
   SubmissionItem,
+  SubmissionItemRole,
   UploadCandidate,
 } from '@/types/creator';
 
@@ -140,7 +141,7 @@ export const creatorService = {
     });
   },
 
-  async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number): Promise<void> {
+  async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number, role: SubmissionItemRole | null = null): Promise<void> {
     await rpc('add_media_submission_item', {
       p_submission_id: submissionId,
       p_upload_intent_id: uploadIntentId,
@@ -148,6 +149,9 @@ export const creatorService = {
       p_title: title,
       p_sort_order: order,
       p_required: true,
+      // Null lets the database infer it: an image is artwork, anything else
+      // follows the submission type.
+      p_role: role,
     });
   },
 

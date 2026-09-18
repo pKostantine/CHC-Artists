@@ -31,9 +31,13 @@ export interface CreatorDashboardData {
 
 export interface CatalogOptions { seasons: CatalogOption[]; hymns: CatalogOption[]; }
 
+export type SubmissionItemRole = 'artwork' | 'track' | 'lesson' | 'other';
+export type ProcessingJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
 export interface SubmissionItem {
   id: string;
   title: string | null;
+  role: SubmissionItemRole;
   sortOrder: number;
   required: boolean;
   mediaAssetId: string | null;
@@ -41,7 +45,12 @@ export interface SubmissionItem {
   mediaType: MediaKind | null;
   contentLength: number | null;
   uploadStatus: string | null;
-  processingStatus: string | null;
+  processingStatus: ProcessingJobStatus | null;
+  processingJobType: string | null;
+  processingAttemptCount: number | null;
+  processingMaxAttempts: number | null;
+  processingError: string | null;
+  processingAvailableAt: string | null;
 }
 
 export interface UploadCandidate {
