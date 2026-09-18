@@ -120,6 +120,8 @@ export interface UploadCandidate {
   uri: string;
   mimeType: string;
   size: number;
+  /** Browser File/Blob retained so large web uploads do not need to be re-read into memory. */
+  sourceFile?: any;
   mediaType: MediaKind;
   progress: number;
   uploading?: boolean;
