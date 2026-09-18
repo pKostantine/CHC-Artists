@@ -27,6 +27,7 @@ export function ReleaseDateTimeField({
   minimumDate,
   hint,
   mode = 'datetime',
+  optional = false,
 }: {
   label: string;
   value: string;
@@ -34,30 +35,48 @@ export function ReleaseDateTimeField({
   minimumDate?: Date;
   hint?: string;
   mode?: 'date' | 'datetime';
+  optional?: boolean;
 }) {
-  const [showAndroidPicker, setShowAndroidPicker] = useState(false);
-  const date = parseLocal(value);
+  const [showPicker, setShowPicker] = useState(false);
+  const hasValue = Boolean(value.trim());
+  const date = hasValue ? parseLocal(value) : new Date();
 
   return (
     <View style={styles.group}>
       <Text style={styles.label}>{label}</Text>
 
       {Platform.OS === 'ios' ? (
-        <DateTimePicker
-          value={date}
-          mode={mode}
-          display="compact"
-          minimumDate={minimumDate}
-          themeVariant="dark"
-          accentColor={COLORS.gold}
-          onValueChange={(_event, selectedDate) => onChange(formatLocal(selectedDate, mode))}
-        />
+        optional && !hasValue && !showPicker ? (
+          <Pressable style={styles.button} onPress={() => setShowPicker(true)}>
+            <Text style={styles.buttonText}>Choose a date</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.pickerRow}>
+            <DateTimePicker
+              value={date}
+              mode={mode}
+              display="compact"
+              minimumDate={minimumDate}
+              themeVariant="dark"
+              accentColor={COLORS.gold}
+              onValueChange={(_event, selectedDate) => {
+                onChange(formatLocal(selectedDate, mode));
+                setShowPicker(false);
+              }}
+            />
+            {optional && hasValue && (
+              <Pressable onPress={() => onChange('')} hitSlop={8}>
+                <Text style={styles.clear}>Clear</Text>
+              </Pressable>
+            )}
+          </View>
+        )
       ) : (
         <>
-          <Pressable style={styles.button} onPress={() => setShowAndroidPicker(true)}>
-            <Text style={styles.buttonText}>{displayValue(date, mode)}</Text>
+          <Pressable style={styles.button} onPress={() => setShowPicker(true)}>
+            <Text style={styles.buttonText}>{hasValue ? displayValue(date, mode) : 'Choose a date'}</Text>
           </Pressable>
-          {showAndroidPicker && (
+          {showPicker && (
             <DateTimePicker
               value={date}
               mode={mode}
@@ -65,11 +84,16 @@ export function ReleaseDateTimeField({
               presentation="dialog"
               accentColor={COLORS.gold}
               onValueChange={(_event, selectedDate) => {
-                setShowAndroidPicker(false);
+                setShowPicker(false);
                 onChange(formatLocal(selectedDate, mode));
               }}
-              onDismiss={() => setShowAndroidPicker(false)}
+              onDismiss={() => setShowPicker(false)}
             />
+          )}
+          {optional && hasValue && (
+            <Pressable onPress={() => onChange('')} hitSlop={8}>
+              <Text style={styles.clear}>Clear date</Text>
+            </Pressable>
           )}
         </>
       )}
@@ -97,5 +121,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   buttonText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, flexWrap: 'wrap' },
+  clear: { color: COLORS.goldBright, fontWeight: '800', fontSize: 13 },
   hint: { color: COLORS.muted, fontSize: 13, lineHeight: 19 },
 });
