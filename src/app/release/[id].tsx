@@ -229,7 +229,13 @@ export default function EditRelease() {
       <PageHeader
         title={release.title}
         subtitle={`${release.releaseType.toUpperCase()} • released as ${release.primaryArtist?.displayName ?? '—'}`}
-        action={<Button kind="primary" label={busy ? 'Saving…' : 'Save changes'} busy={busy} onPress={() => void save()} />}
+        action={<Button
+          kind="primary"
+          label={busy ? 'Saving…' : 'Save changes'}
+          busy={busy}
+          disabled={Boolean(deletingTrackKey) || deletingRelease}
+          onPress={() => void save()}
+        />}
       />
 
       <View style={styles.statusRow}>
@@ -294,7 +300,7 @@ export default function EditRelease() {
                   <Text style={[styles.order, index === tracks.length - 1 && styles.dim]}>↓</Text>
                 </Pressable>
                 <Pressable
-                  disabled={deletingTrackKey === track.key}
+                  disabled={busy || deletingRelease || deletingTrackKey === track.key}
                   onPress={() => void removeTrack(track)}
                   hitSlop={6}
                 >
