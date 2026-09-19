@@ -35,3 +35,12 @@ export interface LyricDraft {
   publicationStatus: string;
   lines: EditableLyricLine[];
 }
+
+
+export interface EditableMultilingualLyricRow {
+  key: string;
+  startMs: number | null;
+  endMs: number | null;
+  texts: Record<string, string>;
+  lineIds?: Record<string, string>;
+}
