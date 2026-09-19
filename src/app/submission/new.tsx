@@ -27,8 +27,8 @@ const MODE_HELP: Record<SubmissionMode, string> = {
 };
 
 const MUSIC_TYPE_OPTIONS = [
-  { id: 'hymn', title: 'Hymn' },
-  { id: 'spiritual_song', title: 'Spiritual song' },
+  { id: 'hymn', title: 'Hymns' },
+  { id: 'spiritual_song', title: 'Spiritual Songs' },
   { id: 'other', title: 'Other' },
 ];
 
@@ -40,8 +40,8 @@ const RECORDING_TYPE_OPTIONS = [
 ];
 
 const MUSIC_TYPE_VALUES: Record<string, string> = {
-  hymn: 'Hymn',
-  spiritual_song: 'Spiritual song',
+  hymn: 'Hymns',
+  spiritual_song: 'Spiritual Songs',
 };
 
 const RECORDING_TYPE_VALUES: Record<string, string> = {
