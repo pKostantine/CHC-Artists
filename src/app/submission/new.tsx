@@ -4,11 +4,12 @@ import { router } from 'expo-router';
 import { FileDropZone } from '@/components/FileDropZone';
 import { MediaPreview } from '@/components/MediaPreview';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
+import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
 import { Banner, Button, Card, Chips, Dropdown, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
-import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, TrackContributorRole, UploadCandidate } from '@/types/creator';
+import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, UploadCandidate } from '@/types/creator';
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { droppedUploadCandidates, pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
@@ -142,154 +143,6 @@ function LearningContributorPicker({ allowChorus, options, value, onChange }: {
           <Text style={uiStyles.link}>+ Add {allowChorus ? 'cantor / chorus' : 'cantor'}</Text>
         </Pressable>
       )}
-    </View>
-  );
-}
-
-const CONTRIBUTOR_ROLES: { id: TrackContributorRole; title: string }[] = [
-  { id: 'featured', title: 'Featured performer / vocals' },
-  { id: 'composer', title: 'Composer / music' },
-  { id: 'arranger', title: 'Arranger' },
-  { id: 'producer', title: 'Producer' },
-  { id: 'lyricist', title: 'Lyricist' },
-  { id: 'artwork', title: 'Track artwork' },
-];
-
-function TrackCredits({ file, identityName, onChange, onCopyToAll }: {
-  file: UploadCandidate;
-  identityName: string;
-  onChange: (change: Partial<UploadCandidate>) => void;
-  onCopyToAll?: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const contributors = file.contributors ?? [];
-  const mainName = file.mainArtistName?.trim() || identityName || 'Your artist profile';
-
-  function addContributor() {
-    onChange({
-      contributors: [
-        ...contributors,
-        { id: `${Date.now()}-${contributors.length}`, name: '', role: 'featured' },
-      ],
-    });
-  }
-
-  function updateContributor(id: string, change: { name?: string; role?: TrackContributorRole }) {
-    onChange({
-      contributors: contributors.map((credit) => (
-        credit.id === id ? { ...credit, ...change } : credit
-      )),
-    });
-  }
-
-  return (
-    <View style={styles.credits}>
-      <Pressable onPress={() => setOpen(!open)} hitSlop={6} style={styles.addLink}>
-        <Text style={uiStyles.link}>
-          {open
-            ? 'Hide song credits'
-            : `Song credits: ${mainName}${contributors.length ? ` • ${contributors.length} contributor${contributors.length === 1 ? '' : 's'}` : ''}`}
-        </Text>
-      </Pressable>
-
-      {open && (
-        <View style={styles.creditsBody}>
-          <Field
-            label="Main artist"
-            value={file.mainArtistName ?? ''}
-            onChangeText={(mainArtistName) => onChange({ mainArtistName })}
-            placeholder={identityName || 'Artist name'}
-            hint={identityName
-              ? `Leave blank to use ${identityName}. Or type any artist name for this track.`
-              : 'Type the main artist name for this track.'}
-          />
-
-          <View style={styles.group}>
-            <Label>Additional contributors</Label>
-            <Text style={uiStyles.muted}>
-              Add everyone who should be credited on this track, then choose what they did.
-            </Text>
-
-            {contributors.map((credit, index) => (
-              <View key={credit.id} style={styles.contributor}>
-                <Field
-                  label={`Contributor ${index + 1}`}
-                  value={credit.name}
-                  onChangeText={(name) => updateContributor(credit.id, { name })}
-                  placeholder="Type a name"
-                />
-                <View style={styles.group}>
-                  <Label>Role</Label>
-                  <Segmented
-                    items={CONTRIBUTOR_ROLES}
-                    value={credit.role}
-                    onChange={(role) => updateContributor(credit.id, { role: role as TrackContributorRole })}
-                  />
-                </View>
-                <Button
-                  kind="ghost"
-                  label="Remove contributor"
-                  onPress={() => onChange({ contributors: contributors.filter((x) => x.id !== credit.id) })}
-                />
-              </View>
-            ))}
-
-            <Button label="+ Add contributor" onPress={addContributor} />
-          </View>
-
-          {onCopyToAll && (
-            <Button
-              kind="secondary"
-              label="Copy these credits to all tracks"
-              onPress={onCopyToAll}
-            />
-          )}
-        </View>
-      )}
-    </View>
-  );
-}
-
-function TrackMetadata({ file, index, total, identityName, onChange, onCopyCreditsToAll }: {
-  file: UploadCandidate;
-  index: number;
-  total: number;
-  identityName: string;
-  onChange: (change: Partial<UploadCandidate>) => void;
-  onCopyCreditsToAll?: () => void;
-}) {
-  const localized = file.localizedTitle ?? { en: '', ar: '', cop: '', fr: '' };
-
-  return (
-    <View style={styles.trackMetadata}>
-      <View style={styles.group}>
-        <Label>{`Track ${index + 1} title`}</Label>
-        <Text style={uiStyles.muted}>
-          English, Arabic, and French are optional individually; enter at least one. CHC prefilled what it could from the filename.
-        </Text>
-        <View style={styles.localeGrid}>
-          {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
-            <View key={key} style={styles.localeField}>
-              <Field
-                label={label}
-                value={localized[key]}
-                onChangeText={(value) => {
-                  const localizedTitle = { ...localized, [key]: value };
-                  onChange({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
-                }}
-                style={key === 'ar' ? styles.rtl : undefined}
-              />
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <TrackCredits
-        file={file}
-        identityName={identityName}
-        onChange={onChange}
-        onCopyToAll={index === 0 && total > 1 ? onCopyCreditsToAll : undefined}
-      />
     </View>
   );
 }
@@ -711,8 +564,8 @@ export default function NewSubmission() {
               onMove={(delta) => move(file.id, delta)}
             />
             {isMusic && (
-              <TrackMetadata
-                file={file}
+              <TrackMetadataEditor
+                value={file}
                 index={index}
                 total={draft.media.length}
                 identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
