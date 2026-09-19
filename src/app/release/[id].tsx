@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { FileDropZone } from '@/components/FileDropZone';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
 import { ReorderableList } from '@/components/ReorderableList';
 import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
@@ -13,7 +14,7 @@ import type { CreatorRelease, CreditOptions, LocalizedMetadata, TrackContributor
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle } from '@/utils/titles';
-import { pickUploadCandidates, runUpload, uploadsBlocking } from '@/utils/uploads';
+import { droppedUploadCandidates, pickUploadCandidates, runUpload, uploadsBlocking } from '@/utils/uploads';
 
 interface EditableTrack {
   key: string;
@@ -143,10 +144,8 @@ export default function EditRelease() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function addTracks() {
-    if (!account) return;
-    const picked = await pickUploadCandidates('audio', true);
-    if (!picked.length) return;
+  function appendTracks(picked: UploadCandidate[]) {
+    if (!account || !picked.length) return;
 
     setTracks((current) => [
       ...current,
@@ -167,6 +166,22 @@ export default function EditRelease() {
         ));
       });
     }
+  }
+
+  async function addTracks() {
+    if (!account) return;
+    const picked = await pickUploadCandidates('audio', true);
+    appendTracks(picked);
+  }
+
+  function receiveDroppedFiles(raw: any[]) {
+    setError('');
+    const picked = droppedUploadCandidates(raw, 'audio');
+    if (!picked.length) {
+      setError('Drop supported audio files here.');
+      return;
+    }
+    appendTracks(picked);
   }
 
   async function changeArtwork() {
@@ -479,6 +494,12 @@ export default function EditRelease() {
         title="Artwork & media"
         description="Replace artwork, add tracks, edit track details, or drag the six-dot handle to choose the exact release order."
       >
+        <FileDropZone kind="audio" onFiles={receiveDroppedFiles} />
+
+        <View style={uiStyles.actions}>
+          <Button label="Add audio files" onPress={() => void addTracks()} disabled={busy || deletingRelease} />
+        </View>
+
         <View style={styles.artworkRow}>
           <View style={styles.coverPreview}>
             {shownCover ? (
@@ -548,9 +569,6 @@ export default function EditRelease() {
           )}
         />
 
-        <View style={uiStyles.actions}>
-          <Button label="Add tracks" onPress={() => void addTracks()} disabled={busy || deletingRelease} />
-        </View>
       </Card>
 
       <Card
