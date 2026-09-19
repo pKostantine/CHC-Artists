@@ -22,19 +22,12 @@ const MODES: { id: SubmissionMode; title: string }[] = [
 
 const MODE_HELP: Record<SubmissionMode, string> = {
   music: 'Add the audio tracks in order, review the guessed English/Arabic/French titles, then add credits. CHC determines Single, EP, or Album automatically.',
-  learning_album: 'Full hymn recordings by a cantor for Learn & Study. Add audio recordings in order.',
-  learning_lesson_set: 'Teaching lessons for one hymn. Add video or audio lessons in order.',
+  learning_album: 'Full hymn recordings by a cantor or chorus for Learn & Study. Choose an existing contributor or add one, then review the English/Arabic/French title.',
+  learning_lesson_set: 'Teaching lessons for one hymn by a cantor. Choose an existing cantor or add one, then review the English/Arabic/French title.',
 };
 
-const LEARNING_LOCALES = [
-  { key: 'en', label: 'English' },
-  { key: 'ar', label: 'Arabic' },
-  { key: 'cop', label: 'Coptic' },
-  { key: 'fr', label: 'French' },
-] as const;
-
-function PersonPicker({ kind, options, value, onChange }: {
-  kind: 'artist' | 'cantor';
+function LearningContributorPicker({ allowChorus, options, value, onChange }: {
+  allowChorus: boolean;
   options: CatalogOption[];
   value: string;
   onChange: (id: string) => void;
@@ -42,16 +35,26 @@ function PersonPicker({ kind, options, value, onChange }: {
   const { addPerson } = useWorkspace();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [newKind, setNewKind] = useState<'cantor' | 'chorus'>('cantor');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const available = (allowChorus ? options : options.filter((option) => option.kind !== 'chorus'))
+    .map((option) => ({
+      id: option.id,
+      title: option.kind === 'chorus' ? `${option.title} (Chorus)` : option.title,
+    }));
+  const label = allowChorus ? 'Cantor / Chorus' : 'Cantor';
 
   async function create() {
     setBusy(true);
     setError('');
     try {
+      const kind = allowChorus ? newKind : 'cantor';
       const row = await addPerson(kind, name);
       onChange(row.id);
       setName('');
+      setNewKind('cantor');
       setAdding(false);
     } catch (e) {
       setError(creatorService.describeError(e));
@@ -62,30 +65,57 @@ function PersonPicker({ kind, options, value, onChange }: {
 
   return (
     <View style={styles.group}>
-      <Label>{kind === 'artist' ? 'Artist' : 'Cantor'}</Label>
-      {options.length ? (
-        <Chips items={options} value={value} onChange={onChange} />
+      <Label>{label}</Label>
+      <Text style={uiStyles.muted}>
+        Choose from CHC&apos;s existing list. New {allowChorus ? 'cantors or choruses' : 'cantors'} are saved to the database immediately.
+      </Text>
+      {available.length ? (
+        <Chips items={available} value={value} onChange={onChange} />
       ) : (
-        <Text style={uiStyles.muted}>You have no {kind}s yet. Create one to continue.</Text>
+        <Text style={uiStyles.muted}>No available {allowChorus ? 'cantors or choruses' : 'cantors'} yet.</Text>
       )}
-      {adding || !options.length ? (
+
+      {adding || !available.length ? (
         <View style={styles.inlineCreate}>
+          {allowChorus && (
+            <View style={styles.group}>
+              <Label>Contributor type</Label>
+              <Segmented
+                items={[{ id: 'cantor', title: 'Cantor' }, { id: 'chorus', title: 'Chorus' }]}
+                value={newKind}
+                onChange={(value) => setNewKind(value as 'cantor' | 'chorus')}
+              />
+            </View>
+          )}
           <Field
-            label={`New ${kind} name`}
+            label={`New ${allowChorus ? newKind : 'cantor'} name`}
             value={name}
             onChangeText={(text) => { setName(text); setError(''); }}
-            placeholder={kind === 'artist' ? 'e.g. St. Mark Choir' : 'e.g. Mo’allem Ibrahim Ayad'}
+            placeholder={allowChorus && newKind === 'chorus' ? 'e.g. St. Mark Chorus' : 'e.g. Mo’allem Ibrahim Ayad'}
+            hint="This is added to CHC as soon as you press Add."
             onSubmitEditing={() => { if (name.trim()) void create(); }}
           />
           <View style={uiStyles.actions}>
-            <Button kind="primary" label={`Create ${kind}`} busy={busy} disabled={!name.trim()} onPress={() => void create()} />
-            {options.length > 0 && <Button kind="ghost" label="Cancel" onPress={() => { setAdding(false); setName(''); setError(''); }} />}
+            <Button
+              kind="primary"
+              label={`Add ${allowChorus ? newKind : 'cantor'}`}
+              busy={busy}
+              disabled={!name.trim()}
+              onPress={() => void create()}
+            />
+            {available.length > 0 && (
+              <Button
+                kind="ghost"
+                label="Cancel"
+                onPress={() => { setAdding(false); setName(''); setNewKind('cantor'); setError(''); }}
+              />
+            )}
           </View>
           {!!error && <Banner tone="error">{error}</Banner>}
         </View>
       ) : (
         <Pressable onPress={() => setAdding(true)} hitSlop={6} style={styles.addLink}>
-          <Text style={uiStyles.link}>+ New {kind}</Text>
+          <Text style={uiStyles.link}>+ Add {allowChorus ? 'cantor / chorus' : 'cantor'}</Text>
         </Pressable>
       )}
     </View>
@@ -349,16 +379,22 @@ export default function NewSubmission() {
   const isMusic = draft.mode === 'music';
   const files = draft.artwork ? [draft.artwork, ...draft.media] : draft.media;
   const inferredReleaseType = releaseTypeForTrackCount(draft.media.length);
-  const submissionTitle = isMusic ? preferredLocalizedTitle(draft.localizedTitle) : draft.title.trim();
+  const submissionTitle = preferredLocalizedTitle(draft.localizedTitle) || draft.title.trim();
 
   const problems: string[] = [];
   if (!account) problems.push('Your creator workspace is still loading.');
-  if (isMusic && !hasMusicTitle(draft.localizedTitle)) problems.push('Add the release title in at least one language.');
-  if (!isMusic && !draft.title.trim()) problems.push('Add a title.');
+  if (!hasMusicTitle(draft.localizedTitle)) {
+    const titleKind = isMusic ? 'release' : draft.mode === 'learning_album' ? 'album' : 'lesson set';
+    problems.push(`Add the ${titleKind} title in at least one language.`);
+  }
   if (isMusic && !draft.musicType.trim()) problems.push('Add a music type.');
   if (isMusic && !draft.recordingType.trim()) problems.push('Add a recording type.');
   if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
-  if (!isMusic && !draft.cantorId) problems.push('Choose or create a cantor.');
+  if (draft.mode === 'learning_album' && !draft.cantorId) problems.push('Choose or add a cantor / chorus.');
+  if (draft.mode === 'learning_lesson_set' && !draft.cantorId) problems.push('Choose or add a cantor.');
+  if (draft.mode === 'learning_lesson_set' && dashboard.cantors.find((option) => option.id === draft.cantorId)?.kind === 'chorus') {
+    problems.push('Lesson sets must be taught by a cantor, not a chorus.');
+  }
   if (draft.mode === 'learning_lesson_set' && !draft.hymnId) problems.push('Choose the hymn these lessons teach.');
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
   if (isMusic) {
@@ -379,8 +415,7 @@ export default function NewSubmission() {
     if (!picked.length) return;
     setDraft((current) => {
       const firstTrack = picked[0];
-      const shouldGuessReleaseTitle = current.mode === 'music'
-        && current.media.length === 0
+      const shouldGuessReleaseTitle = current.media.length === 0
         && !hasMusicTitle(current.localizedTitle);
       const localizedTitle = shouldGuessReleaseTitle
         ? (firstTrack.localizedTitle ?? current.localizedTitle)
@@ -501,9 +536,6 @@ export default function NewSubmission() {
       </Card>
 
       <Card title="Details">
-        {!isMusic && (
-          <Field label="Title" value={draft.title} onChangeText={(title) => patch({ title })} placeholder="Shown to reviewers and, once published, to listeners" />
-        )}
         <Field
           label="Description"
           value={draft.description}
@@ -558,7 +590,12 @@ export default function NewSubmission() {
           </>
         ) : (
           <>
-            <PersonPicker kind="cantor" options={dashboard.cantors} value={draft.cantorId} onChange={(cantorId) => patch({ cantorId })} />
+            <LearningContributorPicker
+              allowChorus={draft.mode === 'learning_album'}
+              options={dashboard.cantors}
+              value={draft.cantorId}
+              onChange={(cantorId) => patch({ cantorId })}
+            />
             <View style={styles.group}>
               <Label>Season (optional)</Label>
               {catalog.seasons.length
@@ -577,43 +614,26 @@ export default function NewSubmission() {
         )}
       </Card>
 
-      {isMusic ? (
-        <Card
-          title="Release title"
-          description="Enter English, Arabic, or French. Each field is optional, but at least one is required. When possible, the first audio filename is used as a starting guess."
-        >
-          <View style={styles.localeGrid}>
-            {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
-              <View key={key} style={styles.localeField}>
-                <Field
-                  label={label}
-                  value={draft.localizedTitle[key]}
-                  onChangeText={(value) => {
-                    const localizedTitle = { ...draft.localizedTitle, [key]: value };
-                    patch({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
-                  }}
-                  style={key === 'ar' ? styles.rtl : undefined}
-                />
-              </View>
-            ))}
-          </View>
-        </Card>
-      ) : (
-        <Card title="Localized title" description="Optional translations for this Learn & Study item.">
-          <View style={styles.localeGrid}>
-            {LEARNING_LOCALES.map(({ key, label }) => (
-              <View key={key} style={styles.localeField}>
-                <Field
-                  label={label}
-                  value={draft.localizedTitle[key]}
-                  onChangeText={(value) => patch({ localizedTitle: { ...draft.localizedTitle, [key]: value } })}
-                  style={key === 'ar' ? styles.rtl : undefined}
-                />
-              </View>
-            ))}
-          </View>
-        </Card>
-      )}
+      <Card
+        title={isMusic ? 'Release title' : draft.mode === 'learning_album' ? 'Album title' : 'Lesson set title'}
+        description="Enter English, Arabic, or French. Each field is optional, but at least one is required. CHC uses the first media filename as a starting guess when possible."
+      >
+        <View style={styles.localeGrid}>
+          {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
+            <View key={key} style={styles.localeField}>
+              <Field
+                label={label}
+                value={draft.localizedTitle[key]}
+                onChangeText={(value) => {
+                  const localizedTitle = { ...draft.localizedTitle, [key]: value };
+                  patch({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
+                }}
+                style={key === 'ar' ? styles.rtl : undefined}
+              />
+            </View>
+          ))}
+        </View>
+      </Card>
 
       <Card title="Artwork & media" description="Files upload privately as soon as you choose them. Nothing is sent to CHC review until you press Submit.">
         <FileDropZone

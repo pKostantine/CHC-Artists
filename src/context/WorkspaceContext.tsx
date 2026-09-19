@@ -43,7 +43,7 @@ interface WorkspaceValue {
   dashboard: CreatorDashboardData;
   catalog: CatalogOptions;
   refresh: () => Promise<void>;
-  addPerson: (kind: 'artist' | 'cantor', name: string) => Promise<CatalogOption>;
+  addPerson: (kind: 'artist' | 'cantor' | 'chorus', name: string) => Promise<CatalogOption>;
   /** The in-progress new submission. Lives here so uploads survive navigating away. */
   draft: CreatorDraft;
   setDraft: (update: (current: CreatorDraft) => CreatorDraft) => void;
@@ -100,14 +100,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [accountId, refresh]);
 
-  const addPerson = useCallback(async (kind: 'artist' | 'cantor', name: string) => {
+  const addPerson = useCallback(async (kind: 'artist' | 'cantor' | 'chorus', name: string) => {
     if (!accountId) throw new Error('Your creator workspace is still loading.');
     const row = kind === 'artist'
       ? await creatorService.createArtist(accountId, name)
-      : await creatorService.createCantor(accountId, name);
+      : await creatorService.createCantor(accountId, name, kind);
     setDashboard((current) => {
       const key = kind === 'artist' ? 'artists' : 'cantors';
-      const list = [...current[key], row].sort((a, b) => a.title.localeCompare(b.title));
+      const withoutDuplicate = current[key].filter((item) => item.id !== row.id);
+      const list = [...withoutDuplicate, row].sort((a, b) => a.title.localeCompare(b.title));
       return { ...current, [key]: list };
     });
     return row;

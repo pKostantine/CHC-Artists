@@ -21,7 +21,13 @@ export interface CreatorSubmission {
   itemCount: number;
 }
 
-export interface CatalogOption { id: string; title: string; subtitle?: string | null; }
+export interface CatalogOption {
+  id: string;
+  title: string;
+  subtitle?: string | null;
+  /** Learning contributor kind. Existing rows without this value are cantors. */
+  kind?: 'cantor' | 'chorus';
+}
 
 export interface CreditArtist { id: string; displayName: string; isCreditOnly?: boolean }
 

@@ -302,8 +302,12 @@ export const creatorService = {
     return rpc<CatalogOption>('create_creator_artist', { p_creator_account_id: accountId, p_display_name: displayName });
   },
 
-  createCantor(accountId: string, displayName: string): Promise<CatalogOption> {
-    return rpc<CatalogOption>('create_creator_cantor', { p_creator_account_id: accountId, p_display_name: displayName });
+  createCantor(accountId: string, displayName: string, contributorType: 'cantor' | 'chorus' = 'cantor'): Promise<CatalogOption> {
+    return rpc<CatalogOption>('create_creator_cantor', {
+      p_creator_account_id: accountId,
+      p_display_name: displayName,
+      p_contributor_type: contributorType,
+    });
   },
 
   items(submissionId: string): Promise<SubmissionItem[]> {
@@ -313,7 +317,7 @@ export const creatorService = {
   /** Creates the submission, its catalog record, and its items, then submits it — all in one transaction. */
   createSubmission(accountId: string, draft: CreatorDraft): Promise<{ submissionId: string; status: string }> {
     const isMusic = draft.mode === 'music';
-    const releaseTitle = isMusic ? preferredLocalizedTitle(draft.localizedTitle) : draft.title.trim();
+    const releaseTitle = preferredLocalizedTitle(draft.localizedTitle) || draft.title.trim();
     const inferredReleaseType = releaseTypeForTrackCount(draft.media.length);
     const items = [
       ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
