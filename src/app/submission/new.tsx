@@ -267,6 +267,7 @@ export default function NewSubmission() {
   if (isMusic && !draft.musicTypeOption) problems.push('Choose a music type.');
   if (isMusic && draft.musicTypeOption === 'other' && !draft.musicType.trim()) problems.push('Enter the other music type.');
   if (isMusic && !draft.recordingTypeOption) problems.push('Choose a recording type.');
+  if (isMusic && draft.releaseTimingMode === 'scheduled' && !draft.scheduledReleaseAt.trim()) problems.push('Choose a scheduled release date and time.');
   if (isMusic && draft.recordingTypeOption === 'other' && !draft.recordingType.trim()) problems.push('Enter the other recording type.');
   if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
   if (draft.mode === 'learning_album' && !draft.cantorId) problems.push('Choose or add a cantor / chorus.');
@@ -486,14 +487,27 @@ export default function NewSubmission() {
             </View>
 
             <View style={styles.group}>
-              <Label>Release date</Label>
-              <ReleaseDateTimeField
-                label="CHC release date & time"
-                value={draft.scheduledReleaseAt}
-                onChange={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
-                minimumDate={earliestReleaseChoice}
-                hint="Uses your local time. Choose an exact time at least 48 hours from now so CHC has time to review it. If you require a release date that is closer than 48 hours, please email x@x.x."
+              <Label>Release timing</Label>
+              <Segmented
+                items={[
+                  { id: 'asap', title: 'As soon as possible' },
+                  { id: 'scheduled', title: 'Select date & time' },
+                ]}
+                value={draft.releaseTimingMode}
+                onChange={(value) => patch({ releaseTimingMode: value as CreatorDraft['releaseTimingMode'] })}
               />
+              <Text style={uiStyles.muted}>
+                As soon as possible goes live immediately when CHC approves it. Scheduled releases go live automatically at the selected time after approval.
+              </Text>
+              {draft.releaseTimingMode === 'scheduled' && (
+                <ReleaseDateTimeField
+                  label="CHC release date & time"
+                  value={draft.scheduledReleaseAt}
+                  onChange={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
+                  minimumDate={earliestReleaseChoice}
+                  hint="Uses your local time. Choose an exact time at least 48 hours from now. Once CHC approves it, you do not need an admin to press Publish at release time. If you require a release date that is closer than 48 hours, please email x@x.x."
+                />
+              )}
               <ReleaseDateTimeField
                 label="Originally released (optional)"
                 value={draft.originalReleaseDate}
