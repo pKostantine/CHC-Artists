@@ -90,15 +90,12 @@ export default function ReleasesScreen() {
         title="Releases"
         subtitle="Approved, fully processed music and everything you have already released."
         action={(
-          <View style={styles.headerActions}>
-            <Button
-              kind="secondary"
-              label={refreshing ? 'Refreshing…' : 'Refresh'}
-              busy={refreshing}
-              onPress={() => void load(true)}
-            />
-            <Button label="New submission" onPress={() => router.push('/submission/new')} />
-          </View>
+          <Button
+            kind="secondary"
+            label={refreshing ? 'Refreshing…' : 'Refresh'}
+            busy={refreshing}
+            onPress={() => void load(true)}
+          />
         )}
       />
 
@@ -134,7 +131,6 @@ export default function ReleasesScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   list: { gap: SPACING.sm },
   releaseRow: {
     flexDirection: 'row',
