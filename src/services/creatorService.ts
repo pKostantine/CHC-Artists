@@ -404,6 +404,29 @@ export const creatorService = {
     return rpc<CreatorRelease>('get_creator_release', { p_release_id: releaseId });
   },
 
+  deleteReleaseTrack(releaseId: string, trackId: string): Promise<{
+    releaseId: string;
+    trackId: string;
+    trackDeleted: boolean;
+    remainingTrackCount: number;
+    releaseType: 'single' | 'ep' | 'album';
+  }> {
+    return rpc('delete_creator_music_release_track', {
+      p_release_id: releaseId,
+      p_track_id: trackId,
+    });
+  },
+
+  deleteRelease(releaseId: string): Promise<{
+    releaseId: string;
+    deleted: boolean;
+    deletedTrackCount: number;
+  }> {
+    return rpc('delete_creator_music_release', {
+      p_release_id: releaseId,
+    });
+  },
+
   updateRelease(releaseId: string, patch: {
     title?: string | null;
     description?: string | null;

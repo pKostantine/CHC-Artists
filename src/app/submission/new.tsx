@@ -639,7 +639,7 @@ export default function NewSubmission() {
                 value={draft.scheduledReleaseAt}
                 onChange={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
                 minimumDate={earliestReleaseChoice}
-                hint="Uses your local time. Choose an exact time at least 48 hours from now so CHC has time to review it."
+                hint="Uses your local time. Choose an exact time at least 48 hours from now so CHC has time to review it. If you require a release date that is closer than 48 hours, please email x@x.x."
               />
               <ReleaseDateTimeField
                 label="Originally released (optional)"

@@ -35,6 +35,8 @@ export default function EditRelease() {
   const [originalDate, setOriginalDate] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [deletingTrackKey, setDeletingTrackKey] = useState<string | null>(null);
+  const [deletingRelease, setDeletingRelease] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -114,12 +116,60 @@ export default function EditRelease() {
   }
 
   async function removeTrack(track: EditableTrack) {
-    if (track.id && !(await confirmAction(
-      'Remove this track?',
-      `"${track.title}" is removed from this release when you save. The file itself is kept.`,
-      'Remove',
+    if (!track.id) {
+      setTracks((current) => current.filter((item) => item.key !== track.key));
+      return;
+    }
+    if (!releaseId) return;
+    if (tracks.filter((item) => item.id).length <= 1) {
+      setError('You cannot delete the last saved track. Delete the whole release instead, or save another track first.');
+      return;
+    }
+    if (!(await confirmAction(
+      'Delete this track permanently?',
+      `"${track.title}" will be removed from this release and deleted from CHC. This cannot be undone.`,
+      'Delete track',
     ))) return;
-    setTracks((current) => current.filter((x) => x.key !== track.key));
+
+    setDeletingTrackKey(track.key);
+    setError('');
+    setNotice('');
+    try {
+      const result = await creatorService.deleteReleaseTrack(releaseId, track.id);
+      setTracks((current) => current.filter((item) => item.key !== track.key));
+      setRelease((current) => current ? {
+        ...current,
+        releaseType: result.releaseType,
+        tracks: current.tracks.filter((item) => item.id !== track.id),
+      } : current);
+      void refresh();
+      setNotice('Track deleted.');
+    } catch (cause) {
+      setError(creatorService.describeError(cause));
+    } finally {
+      setDeletingTrackKey(null);
+    }
+  }
+
+  async function deleteRelease() {
+    if (!releaseId || !release) return;
+    if (!(await confirmAction(
+      'Delete this release permanently?',
+      `"${release.title}" and its tracks will be removed from the CHC music catalog. This cannot be undone.`,
+      'Delete release',
+    ))) return;
+
+    setDeletingRelease(true);
+    setError('');
+    setNotice('');
+    try {
+      await creatorService.deleteRelease(releaseId);
+      await refresh();
+      router.replace('/profile');
+    } catch (cause) {
+      setError(creatorService.describeError(cause));
+      setDeletingRelease(false);
+    }
   }
 
   const pendingUploads = tracks.map((track) => track.upload).filter(Boolean) as UploadCandidate[];
@@ -203,7 +253,7 @@ export default function EditRelease() {
           value={scheduledAt}
           onChangeText={setScheduledAt}
           placeholder="YYYY-MM-DD"
-          hint="Changing this needs at least 48 hours' notice."
+          hint="Changing this needs at least 48 hours' notice. If you require a release date that is closer than 48 hours, please email x@x.x."
         />
         <Field
           label="Originally released (optional)"
@@ -243,8 +293,14 @@ export default function EditRelease() {
                 <Pressable accessibilityLabel="Move down" disabled={index === tracks.length - 1} onPress={() => moveTrack(index, 1)} hitSlop={6}>
                   <Text style={[styles.order, index === tracks.length - 1 && styles.dim]}>↓</Text>
                 </Pressable>
-                <Pressable onPress={() => void removeTrack(track)} hitSlop={6}>
-                  <Text style={uiStyles.remove}>Remove</Text>
+                <Pressable
+                  disabled={deletingTrackKey === track.key}
+                  onPress={() => void removeTrack(track)}
+                  hitSlop={6}
+                >
+                  <Text style={uiStyles.remove}>
+                    {deletingTrackKey === track.key ? 'Deleting…' : track.id ? 'Delete track' : 'Remove'}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -291,6 +347,21 @@ export default function EditRelease() {
 
         <View style={uiStyles.actions}>
           <Button label="Add tracks" onPress={() => void addTracks()} />
+        </View>
+      </Card>
+
+      <Card
+        title="Danger zone"
+        description="Deleting a release permanently removes it from the CHC music catalog. Submission history is retained for audit purposes."
+      >
+        <View style={uiStyles.actions}>
+          <Button
+            kind="danger"
+            label={deletingRelease ? 'Deleting release…' : 'Delete release'}
+            busy={deletingRelease}
+            disabled={busy || Boolean(deletingTrackKey)}
+            onPress={() => void deleteRelease()}
+          />
         </View>
       </Card>
     </Page>
