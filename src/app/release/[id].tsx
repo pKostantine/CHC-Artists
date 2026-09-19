@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
+import { ReorderableList } from '@/components/ReorderableList';
 import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
 import { Banner, Button, Card, Dropdown, Field, Label, Loading, Page, PageHeader, Segmented, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
@@ -95,6 +96,7 @@ export default function EditRelease() {
   const [deletingRelease, setDeletingRelease] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [draggingTracks, setDraggingTracks] = useState(false);
 
   const apply = useCallback((next: CreatorRelease) => {
     const nextScheduled = localDateTimeValue(next.scheduledReleaseAt);
@@ -182,12 +184,12 @@ export default function EditRelease() {
     setTracks((current) => current.map((track) => (track.key === key ? { ...track, ...change } : track)));
   }
 
-  function moveTrack(index: number, delta: -1 | 1) {
+  function moveTrack(fromIndex: number, toIndex: number) {
     setTracks((current) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) return current;
       const next = [...current];
-      const target = index + delta;
-      if (target < 0 || target >= next.length) return current;
-      [next[index], next[target]] = [next[target], next[index]];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
       return next;
     });
   }
@@ -356,7 +358,7 @@ export default function EditRelease() {
   const minimumReleaseDate = release.earliestReleaseAt ? new Date(release.earliestReleaseAt) : undefined;
 
   return (
-    <Page>
+    <Page scrollEnabled={!draggingTracks}>
       <Pressable onPress={() => router.replace('/releases')} hitSlop={8}><Text style={uiStyles.link}>‹ Releases</Text></Pressable>
 
       <PageHeader
@@ -401,34 +403,7 @@ export default function EditRelease() {
         </View>
       </Card>
 
-      <Card title="Artwork" description="Replace the cover art for this release. The new image is processed when you save.">
-        <View style={styles.artworkRow}>
-          <View style={styles.coverPreview}>
-            {shownCover ? (
-              <Image source={{ uri: shownCover }} style={styles.coverImage} resizeMode="cover" />
-            ) : (
-              <Text style={styles.coverFallback}>No artwork</Text>
-            )}
-          </View>
-          <View style={styles.artworkActions}>
-            <Button
-              label={coverUpload ? 'Choose another image' : 'Replace artwork'}
-              onPress={() => void changeArtwork()}
-              disabled={busy}
-            />
-            {!!coverUpload && (
-              <>
-                <Text style={coverUpload.error ? uiStyles.error : uiStyles.muted}>
-                  {fileSize(coverUpload.size)} • {uploadLabel(coverUpload)}
-                </Text>
-                <Button kind="ghost" label="Keep current artwork" onPress={() => setCoverUpload(null)} />
-              </>
-            )}
-          </View>
-        </View>
-      </Card>
-
-      <Card title="Release details">
+      <Card title="Details">
         <Field label="Description" value={description} onChangeText={setDescription} multiline />
 
         <Dropdown
@@ -501,50 +476,77 @@ export default function EditRelease() {
       </Card>
 
       <Card
-        title={`Tracks (${tracks.length})`}
-        description="Reorder, rename, re-credit, add, or permanently delete tracks."
+        title="Artwork & media"
+        description="Replace artwork, add tracks, edit track details, or drag the six-dot handle to choose the exact release order."
       >
-        {tracks.map((track, index) => (
-          <View key={track.key} style={styles.track}>
-            <View style={uiStyles.row}>
-              <View style={styles.trackBody}>
-                {track.upload ? (
-                  <Text style={track.upload.error ? uiStyles.error : uiStyles.muted}>
-                    {fileSize(track.upload.size)} • {uploadLabel(track.upload)}
-                  </Text>
-                ) : (
-                  <Text style={uiStyles.muted}>Track {index + 1} • already on this release</Text>
-                )}
-              </View>
-              <View style={styles.trackActions}>
-                <Pressable accessibilityLabel="Move up" disabled={index === 0} onPress={() => moveTrack(index, -1)} hitSlop={6}>
-                  <Text style={[styles.order, index === 0 && styles.dim]}>↑</Text>
-                </Pressable>
-                <Pressable accessibilityLabel="Move down" disabled={index === tracks.length - 1} onPress={() => moveTrack(index, 1)} hitSlop={6}>
-                  <Text style={[styles.order, index === tracks.length - 1 && styles.dim]}>↓</Text>
-                </Pressable>
-                <Pressable
-                  disabled={busy || deletingRelease || deletingTrackKey === track.key}
-                  onPress={() => void removeTrack(track)}
-                  hitSlop={6}
-                >
-                  <Text style={uiStyles.remove}>
-                    {deletingTrackKey === track.key ? 'Deleting…' : track.id ? 'Delete track' : 'Remove'}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-
-            <TrackMetadataEditor
-              value={track}
-              index={index}
-              total={tracks.length}
-              identityName={identityName}
-              onCopyCreditsToAll={() => copyCreditsToAll(track.key)}
-              onChange={(change) => patchTrack(track.key, change)}
-            />
+        <View style={styles.artworkRow}>
+          <View style={styles.coverPreview}>
+            {shownCover ? (
+              <Image source={{ uri: shownCover }} style={styles.coverImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.coverFallback}>No artwork</Text>
+            )}
           </View>
-        ))}
+          <View style={styles.artworkActions}>
+            <Button
+              label={coverUpload ? 'Choose another image' : 'Replace artwork'}
+              onPress={() => void changeArtwork()}
+              disabled={busy}
+            />
+            {!!coverUpload && (
+              <>
+                <Text style={coverUpload.error ? uiStyles.error : uiStyles.muted}>
+                  {fileSize(coverUpload.size)} • {uploadLabel(coverUpload)}
+                </Text>
+                <Button kind="ghost" label="Keep current artwork" onPress={() => setCoverUpload(null)} />
+              </>
+            )}
+          </View>
+        </View>
+
+        <ReorderableList
+          items={tracks}
+          getKey={(track) => track.key}
+          onMove={moveTrack}
+          onDragActiveChange={setDraggingTracks}
+          disabled={busy || deletingRelease || Boolean(deletingTrackKey)}
+          renderItem={(track, index, dragHandle) => (
+            <View style={styles.track}>
+              <View style={[uiStyles.row, styles.trackHeader]}>
+                {dragHandle}
+                <View style={styles.trackBody}>
+                  {track.upload ? (
+                    <Text style={track.upload.error ? uiStyles.error : uiStyles.muted}>
+                      {fileSize(track.upload.size)} • {uploadLabel(track.upload)}
+                    </Text>
+                  ) : (
+                    <Text style={uiStyles.muted}>Track {index + 1} • already on this release</Text>
+                  )}
+                </View>
+                <View style={styles.trackActions}>
+                  <Pressable
+                    disabled={busy || deletingRelease || deletingTrackKey === track.key}
+                    onPress={() => void removeTrack(track)}
+                    hitSlop={6}
+                  >
+                    <Text style={uiStyles.remove}>
+                      {deletingTrackKey === track.key ? 'Deleting…' : track.id ? 'Delete track' : 'Remove'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <TrackMetadataEditor
+                value={track}
+                index={index}
+                total={tracks.length}
+                identityName={identityName}
+                onCopyCreditsToAll={() => copyCreditsToAll(track.key)}
+                onChange={(change) => patchTrack(track.key, change)}
+              />
+            </View>
+          )}
+        />
 
         <View style={uiStyles.actions}>
           <Button label="Add tracks" onPress={() => void addTracks()} disabled={busy || deletingRelease} />
@@ -590,9 +592,15 @@ const styles = StyleSheet.create({
   coverImage: { width: '100%', height: '100%' },
   coverFallback: { color: COLORS.muted, fontWeight: '800' },
   artworkActions: { flex: 1, minWidth: 220, gap: SPACING.sm },
-  track: { gap: SPACING.sm, paddingBottom: SPACING.md },
+  track: {
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceSoft,
+  },
+  trackHeader: { alignItems: 'center' },
   trackBody: { flex: 1, minWidth: 200, gap: 4 },
   trackActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  order: { color: COLORS.goldBright, fontSize: 20 },
-  dim: { opacity: 0.25 },
 });
