@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
 import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
-import { Banner, Button, Card, Dropdown, Field, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
+import { Banner, Button, Card, Dropdown, Field, Label, Loading, Page, PageHeader, Segmented, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
@@ -84,6 +84,7 @@ export default function EditRelease() {
   const [musicTypeChoice, setMusicTypeChoice] = useState('');
   const [recordingType, setRecordingType] = useState('');
   const [recordingTypeChoice, setRecordingTypeChoice] = useState('');
+  const [releaseTimingMode, setReleaseTimingMode] = useState<'asap' | 'scheduled'>('asap');
   const [scheduledAt, setScheduledAt] = useState('');
   const [initialScheduledAt, setInitialScheduledAt] = useState('');
   const [originalDate, setOriginalDate] = useState('');
@@ -104,6 +105,7 @@ export default function EditRelease() {
     setMusicTypeChoice(musicTypeOption(next.musicType));
     setRecordingType(next.recordingType ?? '');
     setRecordingTypeChoice(recordingTypeOption(next.recordingType));
+    setReleaseTimingMode(next.releaseTimingMode ?? (next.scheduledReleaseAt ? 'scheduled' : 'asap'));
     setScheduledAt(nextScheduled);
     setInitialScheduledAt(nextScheduled);
     setOriginalDate(next.originalReleaseDate ?? '');
@@ -280,6 +282,7 @@ export default function EditRelease() {
     if (!hasMusicTitle(localizedTitle)) { setError('Add a release title in English, Arabic, or French.'); return; }
     if (!musicTypeChoice || !musicType.trim()) { setError('Choose a music type.'); return; }
     if (!recordingTypeChoice || !recordingType.trim()) { setError('Choose a recording type.'); return; }
+    if (releaseTimingMode === 'scheduled' && !scheduledAt.trim()) { setError('Choose a scheduled release date and time.'); return; }
     const invalidTrackIndex = tracks.findIndex((track) => !hasMusicTitle(track.localizedTitle));
     if (invalidTrackIndex >= 0) {
       setError(`Add a title in at least one language for track ${invalidTrackIndex + 1}.`);
@@ -301,6 +304,7 @@ export default function EditRelease() {
       const next = await creatorService.updateRelease(releaseId, {
         title: canonicalTitle,
         description,
+        releaseTimingMode,
         // Do not re-validate an unchanged scheduled date merely because the
         // artist edited another field. A changed date still obeys the 48-hour rule.
         scheduledReleaseAt: scheduledAt !== initialScheduledAt ? scheduledAt || null : null,
@@ -462,13 +466,30 @@ export default function EditRelease() {
           <Field label="Other recording type" value={recordingType} onChangeText={setRecordingType} placeholder="Enter the recording type" />
         )}
 
-        <ReleaseDateTimeField
-          label="Goes live on CHC"
-          value={scheduledAt}
-          onChange={setScheduledAt}
-          minimumDate={minimumReleaseDate}
-          hint="Changing this needs at least 48 hours' notice. If you require a release date that is closer than 48 hours, please email x@x.x."
-        />
+        <View style={styles.group}>
+          <Label>Release timing</Label>
+          <Segmented
+            items={[
+              { id: 'asap', title: 'As soon as possible' },
+              { id: 'scheduled', title: 'Select date & time' },
+            ]}
+            value={releaseTimingMode}
+            onChange={(value) => setReleaseTimingMode(value as 'asap' | 'scheduled')}
+          />
+          <Text style={uiStyles.muted}>
+            As soon as possible goes live immediately when CHC approves this edit. Scheduled releases publish automatically at the selected time.
+          </Text>
+        </View>
+
+        {releaseTimingMode === 'scheduled' && (
+          <ReleaseDateTimeField
+            label="Goes live on CHC"
+            value={scheduledAt}
+            onChange={setScheduledAt}
+            minimumDate={minimumReleaseDate}
+            hint="Changing this needs at least 48 hours' notice. After CHC approves it, publishing at that time is automatic. If you require a release date that is closer than 48 hours, please email x@x.x."
+          />
+        )}
         <ReleaseDateTimeField
           label="Originally released (optional)"
           value={originalDate}
@@ -550,6 +571,7 @@ export default function EditRelease() {
 
 const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' },
+  group: { gap: SPACING.sm },
   localeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md },
   localeField: { flex: 1, minWidth: 220 },
   rtl: { textAlign: 'right', writingDirection: 'rtl' },
