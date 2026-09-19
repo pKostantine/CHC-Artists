@@ -168,7 +168,6 @@ export function LyricsStudio() {
     .map((item) => item.value)
     .filter((locale) => languageStates[locale] === 'published');
   const editableSelected = selectedLocales;
-  const structureEditable = true;
 
   useEffect(() => {
     listEditableTracks()
@@ -618,7 +617,11 @@ export function LyricsStudio() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!dragging}
+      >
         <PageHeader
           title="Lyrics Studio"
           subtitle="Choose a track and all of its lyric languages together. Every selected language shares the same line order and timestamps."
