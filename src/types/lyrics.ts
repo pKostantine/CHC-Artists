@@ -33,6 +33,7 @@ export interface LyricDraft {
   locale: LocaleCode;
   description: string | null;
   publicationStatus: string;
+  hasDraft?: boolean;
   lines: EditableLyricLine[];
 }
 

@@ -11,7 +11,7 @@ import {
 import { Banner, Loading, PageHeader } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { resolveTrackAudio } from '@/services/mediaService';
-import { listEditableTracks, loadLyricDraft, saveLyricDraft } from '@/services/lyricsService';
+import { listEditableTracks, loadLyricDraft, publishLyricLanguages, saveLyricDraft } from '@/services/lyricsService';
 import type {
   EditableLyricLine,
   EditableMultilingualLyricRow,
@@ -28,6 +28,7 @@ import {
   parseLrc,
 } from '@/utils/synchronizedLyrics';
 import { MultilingualLyricRow } from './MultilingualLyricRow';
+import { ReorderableList } from './ReorderableList';
 
 const LOCALES: Array<{ value: LocaleCode; label: string; rtl?: boolean }> = [
   { value: 'cop', label: 'Coptic' },
@@ -36,9 +37,8 @@ const LOCALES: Array<{ value: LocaleCode; label: string; rtl?: boolean }> = [
   { value: 'fr', label: 'French' },
 ];
 
-type LanguageState = 'none' | 'draft' | 'published';
+type LanguageState = 'none' | 'draft' | 'published' | 'published_draft';
 type Message = { tone: 'success' | 'error' | 'info'; text: string } | null;
-type RowLayout = { y: number; height: number };
 
 let newRowCounter = 0;
 
@@ -127,7 +127,15 @@ export function LyricsStudio() {
   const [message, setMessage] = useState<Message>(null);
   const [dirty, setDirty] = useState(false);
   const [timelineWidth, setTimelineWidth] = useState(0);
-  const rowLayouts = useRef<Record<string, RowLayout>>({});
+  const [dragging, setDragging] = useState(false);
+  const dirtyRevision = useRef(0);
+  const draftSnapshot = useRef<{
+    trackId: string | null;
+    selectedLocales: LocaleCode[];
+    rows: EditableMultilingualLyricRow[];
+    descriptions: Record<string, string>;
+    dirty: boolean;
+  }>({ trackId: null, selectedLocales: [], rows: [], descriptions: {}, dirty: false });
 
   const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
   const audioUrl = selectedTrack ? resolveTrackAudio(selectedTrack) : null;
@@ -158,10 +166,8 @@ export function LyricsStudio() {
   const progress = status.duration > 0 ? Math.min(1, Math.max(0, status.currentTime / status.duration)) : 0;
   const publishedLocales = LOCALES
     .map((item) => item.value)
-    .filter((locale) => languageStates[locale] === 'published');
-  const publishedSelected = selectedLocales.filter((locale) => languageStates[locale] === 'published');
-  const editableSelected = selectedLocales.filter((locale) => languageStates[locale] !== 'published');
-  const structureEditable = publishedLocales.length === 0;
+    .filter((locale) => languageStates[locale] === 'published' || languageStates[locale] === 'published_draft');
+  const editableSelected = selectedLocales;
 
   useEffect(() => {
     listEditableTracks()
@@ -180,7 +186,6 @@ export function LyricsStudio() {
     setDraftLoading(true);
     setMessage(null);
     setRows([]);
-    rowLayouts.current = {};
 
     Promise.all(LOCALES.map(async (item) => ({
       locale: item.value,
@@ -196,7 +201,11 @@ export function LyricsStudio() {
 
         results.forEach(({ locale, draft }) => {
           drafts[locale] = draft;
-          states[locale] = !draft ? 'none' : draft.publicationStatus === 'published' ? 'published' : 'draft';
+          states[locale] = !draft
+            ? 'none'
+            : draft.publicationStatus === 'published'
+              ? (draft.hasDraft ? 'published_draft' : 'published')
+              : 'draft';
           nextDescriptions[locale] = draft?.description ?? '';
           if (draft) existingLocales.push(locale);
         });
@@ -219,26 +228,75 @@ export function LyricsStudio() {
     return () => { cancelled = true; };
   }, [trackId]);
 
-  function editRows(update: (current: EditableMultilingualLyricRow[]) => EditableMultilingualLyricRow[]) {
+  useEffect(() => {
+    draftSnapshot.current = {
+      trackId,
+      selectedLocales,
+      rows,
+      descriptions,
+      dirty,
+    };
+  }, [descriptions, dirty, rows, selectedLocales, trackId]);
+
+  useEffect(() => {
+    if (!dirty || !trackId || !selectedLocales.length || draftLoading) return;
+    const timer = setTimeout(() => {
+      void saveDraft(true);
+    }, 900);
+    return () => clearTimeout(timer);
+    // saveDraft intentionally reads the current render snapshot; row/description
+    // changes retrigger this debounce.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descriptions, dirty, draftLoading, rows, selectedLocales, trackId]);
+
+  useEffect(() => () => {
+    const snapshot = draftSnapshot.current;
+    if (!snapshot.dirty || !snapshot.trackId || !snapshot.selectedLocales.length) return;
+    for (const locale of snapshot.selectedLocales) {
+      void saveLyricDraft({
+        trackId: snapshot.trackId,
+        locale,
+        description: snapshot.descriptions[locale]?.trim() || null,
+        lines: editableLinesForLocale(snapshot.rows, locale),
+      }).catch(() => undefined);
+    }
+  }, []);
+
+  function markDirty() {
+    dirtyRevision.current += 1;
     setDirty(true);
+  }
+
+  function editRows(update: (current: EditableMultilingualLyricRow[]) => EditableMultilingualLyricRow[]) {
+    markDirty();
     setRows(update);
   }
 
   async function switchTrack(nextTrackId: string) {
     if (nextTrackId === trackId) return;
-    if (
-      dirty
-      && !(await confirmAction(
-        'Discard unsaved lyrics?',
-        'You have changes across this multilingual lyric timeline that are not saved.',
-        'Discard',
-      ))
-    ) return;
+    if (dirty) {
+      const saved = await saveDraft(true);
+      if (!saved) return;
+    }
     setTrackId(nextTrackId);
   }
 
   function toggleLocale(locale: LocaleCode) {
     setMessage(null);
+
+    // If a language is being hidden immediately after an edit, persist that
+    // language first instead of letting the autosave debounce lose it.
+    if (selectedLocales.includes(locale) && dirty && trackId) {
+      void saveLyricDraft({
+        trackId,
+        locale,
+        description: descriptions[locale]?.trim() || null,
+        lines: editableLinesForLocale(rows, locale),
+      }).catch((error) => {
+        setMessage({ tone: 'error', text: errorText(error, 'Could not autosave that lyric language.') });
+      });
+    }
+
     setSelectedLocales((current) => {
       if (current.includes(locale)) {
         if (current.length === 1) {
@@ -260,19 +318,17 @@ export function LyricsStudio() {
   }
 
   function replaceRowStart(index: number, startMs: number | null) {
-    if (!structureEditable) return;
     editRows((current) => current.map((row, rowIndex) => (
       rowIndex === index ? { ...row, startMs } : row
     )));
   }
 
   function markLine(index: number) {
-    if (!structureEditable || !rows[index]) return;
+    if (!rows[index]) return;
     replaceRowStart(index, Math.max(0, Math.round(status.currentTime * 1_000)));
   }
 
   function addLine() {
-    if (!structureEditable) return;
     const texts: Record<string, string> = {};
     LOCALES.forEach((item) => { texts[item.value] = ''; });
     editRows((current) => [...current, {
@@ -285,40 +341,17 @@ export function LyricsStudio() {
   }
 
   function deleteLine(index: number) {
-    if (!structureEditable) return;
     editRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
   }
 
-  function dragLine(index: number, deltaY: number) {
-    if (!structureEditable) return;
-    const row = rows[index];
-    const sourceLayout = row ? rowLayouts.current[row.key] : null;
-    if (!row || !sourceLayout) return;
-
-    const draggedCenter = sourceLayout.y + (sourceLayout.height / 2) + deltaY;
-    let targetIndex = index;
-    let closestDistance = Number.POSITIVE_INFINITY;
-
-    rows.forEach((candidate, candidateIndex) => {
-      const layout = rowLayouts.current[candidate.key];
-      if (!layout) return;
-      const center = layout.y + (layout.height / 2);
-      const distance = Math.abs(draggedCenter - center);
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        targetIndex = candidateIndex;
-      }
-    });
-
-    if (targetIndex === index) return;
-
+  function moveLine(fromIndex: number, toIndex: number) {
     editRows((current) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) return current;
       const next = [...current];
-      const [moved] = next.splice(index, 1);
-      next.splice(targetIndex, 0, moved);
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
       return next;
     });
-    rowLayouts.current = {};
   }
 
   function seekBy(deltaSeconds: number) {
@@ -326,29 +359,17 @@ export function LyricsStudio() {
     player.seekTo(status.duration > 0 ? Math.min(status.duration, requested) : requested);
   }
 
-  async function save() {
-    if (!trackId || !editableSelected.length) {
-      setMessage({ tone: 'info', text: 'The selected languages are already published, so there is nothing editable to save.' });
-      return;
+  async function saveDraft(silent = false): Promise<boolean> {
+    if (!trackId || !selectedLocales.length) return true;
+    const revision = dirtyRevision.current;
+
+    if (!silent) {
+      setSaving(true);
+      setMessage(null);
     }
-
-    const incomplete = editableSelected.filter((locale) => (
-      rows.some((row) => !(row.texts[locale] ?? '').trim())
-    ));
-
-    if (incomplete.length) {
-      setMessage({
-        tone: 'error',
-        text: `Fill every synced line for ${incomplete.map(localeLabel).join(', ')} before saving so the languages stay aligned.`,
-      });
-      return;
-    }
-
-    setSaving(true);
-    setMessage(null);
 
     try {
-      const saved = await Promise.all(editableSelected.map((locale) => saveLyricDraft({
+      const saved = await Promise.all(selectedLocales.map((locale) => saveLyricDraft({
         trackId,
         locale,
         description: descriptions[locale]?.trim() || null,
@@ -367,25 +388,74 @@ export function LyricsStudio() {
       setLanguageStates((current) => {
         const next = { ...current };
         saved.forEach((draft) => {
-          next[draft.locale] = draft.publicationStatus === 'published' ? 'published' : 'draft';
+          next[draft.locale] = draft.publicationStatus === 'published' ? 'published_draft' : 'draft';
         });
         return next;
       });
+
+      if (dirtyRevision.current === revision) setDirty(false);
+      if (!silent) {
+        setMessage({ tone: 'success', text: 'Draft saved.' });
+      }
+      return true;
+    } catch (error) {
+      setMessage({ tone: 'error', text: errorText(error, 'Could not save the lyric draft.') });
+      return false;
+    } finally {
+      if (!silent) setSaving(false);
+    }
+  }
+
+  async function publishLyrics() {
+    if (!trackId || !selectedLocales.length) return;
+
+    if (!rows.length) {
+      setMessage({ tone: 'error', text: 'Add at least one lyric line before publishing.' });
+      return;
+    }
+
+    const incompleteText = selectedLocales.filter((locale) =>
+      rows.some((row) => !(row.texts[locale] ?? '').trim()),
+    );
+    if (incompleteText.length) {
+      setMessage({
+        tone: 'error',
+        text: `Fill every line for ${incompleteText.map(localeLabel).join(', ')} before publishing.`,
+      });
+      return;
+    }
+
+    if (rows.some((row) => row.startMs === null)) {
+      setMessage({ tone: 'error', text: 'Set a synchronized start time for every line before publishing.' });
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const saved = await saveDraft(true);
+      if (!saved) return;
+
+      await publishLyricLanguages(trackId, selectedLocales);
+      setLanguageStates((current) => {
+        const next = { ...current };
+        selectedLocales.forEach((locale) => { next[locale] = 'published'; });
+        return next;
+      });
+      dirtyRevision.current += 1;
       setDirty(false);
       setMessage({
         tone: 'success',
-        text: `Saved one synchronized lyric timeline for ${editableSelected.map(localeLabel).join(', ')}.`,
+        text: `Published ${selectedLocales.map(localeLabel).join(', ')} lyrics to CHC.`,
       });
     } catch (error) {
-      setMessage({ tone: 'error', text: errorText(error, 'Could not save the multilingual lyrics.') });
+      setMessage({ tone: 'error', text: errorText(error, 'Could not publish the lyrics.') });
     } finally {
       setSaving(false);
     }
   }
 
   async function importLrc(locale: LocaleCode) {
-    if (languageStates[locale] === 'published') return;
-
     try {
       const contents = await importLrcFile();
       if (contents === null) return;
@@ -541,7 +611,7 @@ export function LyricsStudio() {
   }
 
   async function clearTiming() {
-    if (!timedCount || !structureEditable) return;
+    if (!timedCount) return;
     if (!(await confirmAction('Clear all timing?', 'This keeps every language and lyric line but removes the shared timestamps.', 'Clear timing'))) return;
     editRows((current) => current.map((row) => ({ ...row, startMs: null, endMs: null })));
   }
@@ -565,7 +635,11 @@ export function LyricsStudio() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        scrollEnabled={!dragging}
+      >
         <PageHeader
           title="Lyrics Studio"
           subtitle="Choose a track and all of its lyric languages together. Every selected language shares the same line order and timestamps."
@@ -612,8 +686,8 @@ export function LyricsStudio() {
                   </View>
                   <Text style={[styles.languageChipText, selected && styles.languageChipTextSelected]}>{item.label}</Text>
                   {state !== 'none' && (
-                    <Text style={[styles.languageState, state === 'published' && styles.languageStatePublished]}>
-                      {state === 'published' ? 'Published' : 'Saved'}
+                    <Text style={[styles.languageState, (state === 'published' || state === 'published_draft') && styles.languageStatePublished]}>
+                      {state === 'published_draft' ? 'Published · Draft' : state === 'published' ? 'Published' : 'Draft saved'}
                     </Text>
                   )}
                 </Pressable>
@@ -633,18 +707,17 @@ export function LyricsStudio() {
           <View style={styles.languagePasteGrid}>
             {selectedLocales.map((locale) => {
               const language = LOCALES.find((item) => item.value === locale);
-              const isPublished = languageStates[locale] === 'published';
+              const isPublished = languageStates[locale] === 'published' || languageStates[locale] === 'published_draft';
               return (
                 <View key={locale} style={styles.languagePasteCard}>
                   <View style={styles.languagePasteHeader}>
                     <View>
                       <Text style={styles.languagePasteTitle}>{language?.label ?? locale}</Text>
-                      {isPublished && <Text style={styles.publishedSmall}>Published · view only</Text>}
+                      {isPublished && <Text style={styles.publishedSmall}>Published · editable</Text>}
                     </View>
                     <View style={styles.inlineButtons}>
                       <Pressable
-                        style={[styles.miniButton, isPublished && styles.disabledButton]}
-                        disabled={isPublished}
+                        style={styles.miniButton}
                         onPress={() => void importLrc(locale)}
                       >
                         <Text style={styles.miniButtonText}>Import LRC</Text>
@@ -660,24 +733,22 @@ export function LyricsStudio() {
                   </View>
 
                   <TextInput
-                    style={[styles.pasteBox, language?.rtl && styles.arabic, isPublished && styles.readOnly]}
-                    placeholder={isPublished ? 'Published lyrics are shown in Sync below.' : `Paste ${language?.label ?? locale} lyrics here…`}
+                    style={[styles.pasteBox, language?.rtl && styles.arabic]}
+                    placeholder={`Paste ${language?.label ?? locale} lyrics here…`}
                     placeholderTextColor={COLORS.muted}
                     value={pasteTexts[locale] ?? ''}
-                    editable={!isPublished}
                     onChangeText={(text) => setPasteTexts((current) => ({ ...current, [locale]: text }))}
                     multiline
                   />
 
                   <TextInput
-                    style={[styles.description, language?.rtl && styles.arabic, isPublished && styles.readOnly]}
+                    style={[styles.description, language?.rtl && styles.arabic]}
                     placeholder="Optional description"
                     placeholderTextColor={COLORS.muted}
                     value={descriptions[locale] ?? ''}
-                    editable={!isPublished}
                     onChangeText={(value) => {
                       setDescriptions((current) => ({ ...current, [locale]: value }));
-                      setDirty(true);
+                      markDirty();
                     }}
                     multiline
                   />
@@ -703,29 +774,11 @@ export function LyricsStudio() {
                 Every block is one meaning across all selected languages. Edit any language directly here, add lines whenever you need them, and drag the six-dot handle to put blocks in the exact order you want.
               </Text>
             </View>
-            <View style={styles.syncHeaderActions}>
-              <Pressable
-                style={[styles.secondaryButton, !structureEditable && styles.disabledButton]}
-                disabled={!structureEditable}
-                onPress={addLine}
-              >
-                <Text style={styles.secondaryButtonText}>+ Add line</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.primaryButton, (saving || !trackId || !editableSelected.length) && styles.disabledButton]}
-                disabled={saving || !trackId || !editableSelected.length}
-                onPress={() => void save()}
-              >
-                <Text style={styles.primaryButtonText}>{saving ? 'Saving…' : dirty ? 'Save lyrics •' : 'Save lyrics'}</Text>
-              </Pressable>
-            </View>
           </View>
 
           {publishedLocales.length > 0 && (
             <Banner tone="info">
-              {publishedLocales.map(localeLabel).join(', ')} {publishedLocales.length === 1 ? 'is' : 'are'} already published.
-              Published lyrics remain the timing source for this track, so the shared order and timestamps are locked while you add or edit other languages.
-              {publishedSelected.length ? ' The published language text is shown read-only below.' : ''}
+              Published lyrics stay live while you edit. Your changes are autosaved as a draft and replace the live lyrics only when you press Publish lyrics.
             </Banner>
           )}
 
@@ -796,9 +849,9 @@ export function LyricsStudio() {
                   <Pressable
                     style={[
                       styles.markNextButton,
-                      (!audioUrl || nextUntimedIndex < 0 || !structureEditable) && styles.disabledButton,
+                      (!audioUrl || nextUntimedIndex < 0) && styles.disabledButton,
                     ]}
-                    disabled={!audioUrl || nextUntimedIndex < 0 || !structureEditable}
+                    disabled={!audioUrl || nextUntimedIndex < 0}
                     onPress={() => markLine(nextUntimedIndex)}
                   >
                     <Text style={styles.markNextText}>
@@ -815,8 +868,8 @@ export function LyricsStudio() {
                 <View style={styles.rowBetween}>
                   <Text style={styles.muted}>The gold block is the line currently playing. Drag only from the six-dot handle.</Text>
                   <Pressable
-                    style={[styles.textButton, (!timedCount || !structureEditable) && styles.disabledButton]}
-                    disabled={!timedCount || !structureEditable}
+                    style={[styles.textButton, !timedCount && styles.disabledButton]}
+                    disabled={!timedCount}
                     onPress={() => void clearTiming()}
                   >
                     <Text style={styles.textButtonText}>Clear all timing</Text>
@@ -824,10 +877,13 @@ export function LyricsStudio() {
                 </View>
               )}
 
-              <View style={styles.lines}>
-                {rows.map((row, index) => (
+              <ReorderableList
+                items={rows}
+                getKey={(row) => row.key}
+                onMove={moveLine}
+                onDragActiveChange={setDragging}
+                renderItem={(row, index, dragHandle, rowDragging) => (
                   <MultilingualLyricRow
-                    key={row.key}
                     row={row}
                     sequence={index + 1}
                     active={index === activeIndex}
@@ -837,35 +893,52 @@ export function LyricsStudio() {
                         value: locale,
                         label: language?.label ?? locale,
                         rtl: language?.rtl,
-                        published: languageStates[locale] === 'published',
+                        published: languageStates[locale] === 'published' || languageStates[locale] === 'published_draft',
                       };
                     })}
-                    structureEditable={structureEditable}
+                    dragHandle={dragHandle}
+                    dragging={rowDragging}
                     onTextChange={(locale, text) => replaceRowText(index, locale, text)}
                     onStartChange={(startMs) => replaceRowStart(index, startMs)}
                     onMark={() => markLine(index)}
                     onSeek={() => row.startMs !== null && player.seekTo(row.startMs / 1_000)}
                     onDelete={() => deleteLine(index)}
-                    onDragEnd={(deltaY) => dragLine(index, deltaY)}
-                    onLayoutRow={(y, height) => { rowLayouts.current[row.key] = { y, height }; }}
                   />
-                ))}
-              </View>
+                )}
+                style={styles.lines}
+              />
 
               {!rows.length && (
                 <View style={styles.emptySync}>
-                  <Text style={styles.muted}>Paste language lines above or add a blank synced line here to start.</Text>
-                  <Pressable
-                    style={[styles.secondaryButton, !structureEditable && styles.disabledButton]}
-                    disabled={!structureEditable}
-                    onPress={addLine}
-                  >
-                    <Text style={styles.secondaryButtonText}>+ Add first line</Text>
-                  </Pressable>
+                  <Text style={styles.muted}>Paste language lines above or use the Add line button below to start.</Text>
                 </View>
               )}
             </>
           )}
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={dragging}
+            onPress={addLine}
+            style={[styles.addLineFull, dragging && styles.disabledButton]}
+          >
+            <Text style={styles.addLineFullText}>+ Add line</Text>
+          </Pressable>
+
+          <View style={styles.publishFooter}>
+            <Text style={styles.autosaveNote}>
+              Lyrics are automatically saved as a draft when you exit.
+              {dirty ? ' Saving draft…' : ''}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving || !trackId || !selectedLocales.length || dragging}
+              onPress={() => void publishLyrics()}
+              style={[styles.primaryButton, (saving || !trackId || !selectedLocales.length || dragging) && styles.disabledButton]}
+            >
+              <Text style={styles.primaryButtonText}>{saving ? 'Publishing…' : 'Publish lyrics'}</Text>
+            </Pressable>
+          </View>
 
           {!!message && <Banner tone={message.tone}>{message.text}</Banner>}
         </View>
@@ -1066,6 +1139,25 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   miniButtonText: { color: COLORS.goldBright, fontWeight: '800', fontSize: 10 },
+  addLineFull: {
+    width: '100%',
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+    borderRadius: RADII.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.black,
+  },
+  addLineFullText: { color: COLORS.goldBright, fontWeight: '900', fontSize: 14 },
+  publishFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: SPACING.md,
+  },
+  autosaveNote: { flex: 1, minWidth: 220, color: COLORS.muted, fontSize: 12, textAlign: 'right' },
   disabledButton: { opacity: 0.35 },
 
   playbackCard: {
