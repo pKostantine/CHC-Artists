@@ -49,6 +49,36 @@ export async function saveLyricDraft(input: {
 }
 
 
+export async function saveLyricStudioDraft(input: {
+  trackId: string;
+  languages: Array<{
+    locale: LocaleCode;
+    description: string | null;
+    lines: EditableLyricLine[];
+  }>;
+}): Promise<{ trackId: string; languages: LyricDraft[]; savedAt: string }> {
+  const { data, error } = await supabase.rpc('save_track_lyric_studio_draft', {
+    p_track_id: input.trackId,
+    p_languages: input.languages.map((language) => ({
+      locale: language.locale,
+      description: language.description,
+      lines: language.lines.map((line) => ({
+        id: line.id ?? null,
+        sequence: line.sequence,
+        startMs: line.startMs,
+        endMs: line.endMs,
+        text: line.text,
+      })),
+    })),
+  });
+
+  return unwrap(
+    data as { trackId: string; languages: LyricDraft[]; savedAt: string } | null,
+    error,
+  );
+}
+
+
 export async function publishLyricLanguages(
   trackId: string,
   locales: LocaleCode[],
