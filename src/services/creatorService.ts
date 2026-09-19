@@ -15,6 +15,8 @@ import type {
   CreditOptions,
   SubmissionItem,
   SubmissionItemRole,
+  TrackContributor,
+  LocalizedMetadata,
   UploadCandidate,
 } from '@/types/creator';
 
@@ -445,35 +447,32 @@ export const creatorService = {
       id?: string;
       uploadIntentId?: string;
       title?: string;
-      mainArtistId?: string | null;
-      featuredArtistIds?: string[];
+      localizedTitle?: LocalizedMetadata;
+      mainArtistName?: string;
+      contributors?: TrackContributor[];
     }[] | null;
     coverUploadIntentId?: string | null;
   }): Promise<CreatorRelease> {
-    await rpc<CreatorRelease>('update_creator_release', {
+    return rpc<CreatorRelease>('update_creator_release_v2', {
       p_release_id: releaseId,
       p_title: patch.title ?? null,
       p_description: patch.description ?? null,
       p_scheduled_release_at: patch.scheduledReleaseAt ? toIsoOrNull(patch.scheduledReleaseAt) : null,
       p_original_release_date: nullIfBlank(patch.originalReleaseDate ?? ''),
       p_clear_original_release_date: Boolean(patch.clearOriginalReleaseDate),
-      // The dedicated metadata RPC below owns the editable title-language set,
-      // including removing a title that the artist cleared.
-      p_localized_titles: null,
-      p_tracks: patch.tracks ?? null,
+      p_localized_titles: patch.localizedTitles ?? null,
+      p_music_type: patch.musicType ?? null,
+      p_recording_type: patch.recordingType ?? null,
+      p_tracks: patch.tracks?.map((track) => ({
+        id: track.id,
+        uploadIntentId: track.uploadIntentId,
+        title: track.title,
+        localizedTitles: track.localizedTitle ?? {},
+        mainArtistName: track.mainArtistName ?? '',
+        contributors: track.contributors ?? [],
+      })) ?? null,
       p_cover_upload_intent_id: patch.coverUploadIntentId ?? null,
     });
-
-    if (patch.localizedTitles !== undefined || patch.musicType !== undefined || patch.recordingType !== undefined) {
-      await rpc<void>('update_creator_release_metadata', {
-        p_release_id: releaseId,
-        p_music_type: patch.musicType ?? null,
-        p_recording_type: patch.recordingType ?? null,
-        p_localized_titles: patch.localizedTitles ?? null,
-      });
-    }
-
-    return rpc<CreatorRelease>('get_creator_release', { p_release_id: releaseId });
   },
 
   async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number, role: SubmissionItemRole | null = null): Promise<void> {
