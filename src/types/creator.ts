@@ -69,6 +69,9 @@ export interface ReleaseTrack {
   durationMs: number | null;
   publicationStatus: PublicationStatus;
   hasMedia: boolean;
+  localizedTitle: LocalizedMetadata;
+  mainArtistName: string;
+  contributors: TrackContributor[];
   mainArtist: CreditArtist | null;
   featuredArtists: CreditArtist[];
 }
@@ -98,6 +101,8 @@ export interface CreatorRelease {
   description: string | null;
   releaseType: ReleaseType;
   publicationStatus: PublicationStatus;
+  musicType: string | null;
+  recordingType: string | null;
   scheduledReleaseAt: string | null;
   originalReleaseDate: string | null;
   displayDate: string | null;
