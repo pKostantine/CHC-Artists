@@ -37,7 +37,7 @@ const LOCALES: Array<{ value: LocaleCode; label: string; rtl?: boolean }> = [
   { value: 'fr', label: 'French' },
 ];
 
-type LanguageState = 'none' | 'draft' | 'published';
+type LanguageState = 'none' | 'draft' | 'published' | 'published_draft';
 type Message = { tone: 'success' | 'error' | 'info'; text: string } | null;
 
 let newRowCounter = 0;
@@ -166,7 +166,7 @@ export function LyricsStudio() {
   const progress = status.duration > 0 ? Math.min(1, Math.max(0, status.currentTime / status.duration)) : 0;
   const publishedLocales = LOCALES
     .map((item) => item.value)
-    .filter((locale) => languageStates[locale] === 'published');
+    .filter((locale) => languageStates[locale] === 'published' || languageStates[locale] === 'published_draft');
   const editableSelected = selectedLocales;
 
   useEffect(() => {
@@ -201,7 +201,11 @@ export function LyricsStudio() {
 
         results.forEach(({ locale, draft }) => {
           drafts[locale] = draft;
-          states[locale] = !draft ? 'none' : draft.publicationStatus === 'published' ? 'published' : 'draft';
+          states[locale] = !draft
+            ? 'none'
+            : draft.publicationStatus === 'published'
+              ? (draft.hasDraft ? 'published_draft' : 'published')
+              : 'draft';
           nextDescriptions[locale] = draft?.description ?? '';
           if (draft) existingLocales.push(locale);
         });
@@ -370,7 +374,7 @@ export function LyricsStudio() {
       setLanguageStates((current) => {
         const next = { ...current };
         saved.forEach((draft) => {
-          next[draft.locale] = draft.publicationStatus === 'published' ? 'published' : 'draft';
+          next[draft.locale] = draft.publicationStatus === 'published' ? 'published_draft' : 'draft';
         });
         return next;
       });
@@ -668,8 +672,8 @@ export function LyricsStudio() {
                   </View>
                   <Text style={[styles.languageChipText, selected && styles.languageChipTextSelected]}>{item.label}</Text>
                   {state !== 'none' && (
-                    <Text style={[styles.languageState, state === 'published' && styles.languageStatePublished]}>
-                      {state === 'published' ? 'Published' : 'Saved'}
+                    <Text style={[styles.languageState, (state === 'published' || state === 'published_draft') && styles.languageStatePublished]}>
+                      {state === 'published_draft' ? 'Published · Draft' : state === 'published' ? 'Published' : 'Draft saved'}
                     </Text>
                   )}
                 </Pressable>
@@ -689,7 +693,7 @@ export function LyricsStudio() {
           <View style={styles.languagePasteGrid}>
             {selectedLocales.map((locale) => {
               const language = LOCALES.find((item) => item.value === locale);
-              const isPublished = languageStates[locale] === 'published';
+              const isPublished = languageStates[locale] === 'published' || languageStates[locale] === 'published_draft';
               return (
                 <View key={locale} style={styles.languagePasteCard}>
                   <View style={styles.languagePasteHeader}>
@@ -875,7 +879,7 @@ export function LyricsStudio() {
                         value: locale,
                         label: language?.label ?? locale,
                         rtl: language?.rtl,
-                        published: languageStates[locale] === 'published',
+                        published: languageStates[locale] === 'published' || languageStates[locale] === 'published_draft',
                       };
                     })}
                     dragHandle={dragHandle}
