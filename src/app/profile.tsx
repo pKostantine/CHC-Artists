@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Banner, Button, Card, Field, Label, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
@@ -7,21 +7,88 @@ import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
 import { resolveImageUrl } from '@/services/mediaService';
 import type { ArtistProfile, ArtistSocialLink } from '@/types/creator';
-import { pickUploadCandidates, runUpload } from '@/utils/uploads';
+import { pickUploadCandidates } from '@/utils/uploads';
 
-/** The platforms the database accepts, in the order they are usually wanted. */
-const PLATFORMS: { id: string; label: string; placeholder: string }[] = [
+const PLATFORMS = [
+  { id: 'website', label: 'Website', placeholder: 'https://yourwebsite.com' },
+  { id: 'linktree', label: 'Linktree', placeholder: 'https://linktr.ee/yourname' },
   { id: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@yourchannel' },
+  { id: 'soundcloud', label: 'SoundCloud', placeholder: 'https://soundcloud.com/you' },
   { id: 'spotify', label: 'Spotify', placeholder: 'https://open.spotify.com/artist/…' },
   { id: 'apple_music', label: 'Apple Music', placeholder: 'https://music.apple.com/artist/…' },
-  { id: 'soundcloud', label: 'SoundCloud', placeholder: 'https://soundcloud.com/you' },
-  { id: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/you' },
   { id: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/you' },
-  { id: 'tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@you' },
-  { id: 'x', label: 'X', placeholder: 'https://x.com/you' },
-  { id: 'bandcamp', label: 'Bandcamp', placeholder: 'https://you.bandcamp.com' },
-  { id: 'website', label: 'Website', placeholder: 'https://example.com' },
-];
+  { id: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/you' },
+] as const;
+
+const PLATFORM_IDS = new Set<string>(PLATFORMS.map((platform) => platform.id));
+const LEGACY_LABELS: Record<string, string> = {
+  tiktok: 'TikTok',
+  x: 'X',
+  bandcamp: 'Bandcamp',
+};
+
+interface ExtraLink {
+  id: string;
+  name: string;
+  url: string;
+}
+
+let extraLinkSequence = 0;
+
+function newExtraLink(): ExtraLink {
+  extraLinkSequence += 1;
+  return { id: `${Date.now()}-${extraLinkSequence}`, name: '', url: '' };
+}
+
+function normalizeUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function hostnameFor(value: string): string | null {
+  try {
+    return new URL(normalizeUrl(value)).hostname.toLowerCase().replace(/\.$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function hostIs(host: string, domain: string): boolean {
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
+function standardLinkError(platform: string, value: string): string {
+  if (!value.trim()) return '';
+  const host = hostnameFor(value);
+  if (!host) return 'Enter a valid web link.';
+
+  switch (platform) {
+    case 'website':
+      return '';
+    case 'linktree':
+      return host === 'linktr.ee' || host === 'www.linktr.ee' ? '' : 'This must be a Linktree link (linktr.ee).';
+    case 'youtube':
+      return hostIs(host, 'youtube.com') || host === 'youtu.be' ? '' : 'This must be a YouTube link.';
+    case 'soundcloud':
+      return hostIs(host, 'soundcloud.com') ? '' : 'This must be a SoundCloud link.';
+    case 'spotify':
+      return hostIs(host, 'spotify.com') || host === 'spotify.link' ? '' : 'This must be a Spotify link.';
+    case 'apple_music':
+      return host === 'music.apple.com' ? '' : 'This must be an Apple Music link.';
+    case 'facebook':
+      return hostIs(host, 'facebook.com') || host === 'fb.com' || host === 'fb.me' ? '' : 'This must be a Facebook link.';
+    case 'instagram':
+      return hostIs(host, 'instagram.com') ? '' : 'This must be an Instagram link.';
+    default:
+      return '';
+  }
+}
+
+function generalLinkError(value: string): string {
+  if (!value.trim()) return 'Enter a URL.';
+  return hostnameFor(value) ? '' : 'Enter a valid web link.';
+}
 
 export default function ArtistProfileScreen() {
   const { account } = useWorkspace();
@@ -34,15 +101,40 @@ export default function ArtistProfileScreen() {
   const [displayName, setDisplayName] = useState('');
   const [biography, setBiography] = useState('');
   const [links, setLinks] = useState<Record<string, string>>({});
+  const [extraLinks, setExtraLinks] = useState<ExtraLink[]>([]);
+  const [linkErrors, setLinkErrors] = useState<Record<string, string>>({});
   const [pinned, setPinned] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [pictureProgress, setPictureProgress] = useState(0);
+  const [pendingPictureUri, setPendingPictureUri] = useState<string | null>(null);
 
   const apply = useCallback((next: ArtistProfile) => {
     setProfile(next);
     setDisplayName(next.displayName);
     setBiography(next.biography ?? '');
-    setLinks(Object.fromEntries(next.socialLinks.map((link) => [link.platform, link.url])));
+
+    const standard: Record<string, string> = {};
+    const extras: ExtraLink[] = [];
+    for (const link of next.socialLinks) {
+      if (PLATFORM_IDS.has(link.platform)) {
+        standard[link.platform] = link.url;
+        continue;
+      }
+
+      const customId = link.platform.startsWith('custom:')
+        ? link.platform.slice('custom:'.length)
+        : link.platform;
+      extras.push({
+        id: customId || `existing-${extras.length}`,
+        name: link.label?.trim() || LEGACY_LABELS[link.platform] || link.platform,
+        url: link.url,
+      });
+    }
+
+    setLinks(standard);
+    setExtraLinks(extras);
     setPinned(next.pinnedReleases.map((release) => release.id));
+    if (!next.profileImagePending) setPendingPictureUri(null);
   }, []);
 
   const load = useCallback(async () => {
@@ -60,20 +152,86 @@ export default function ArtistProfileScreen() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Profile pictures are processed asynchronously. Poll only while one is
+  // pending so the finished image replaces the local preview automatically.
+  useEffect(() => {
+    if (!account || !profile?.profileImagePending) return;
+
+    let cancelled = false;
+    let running = false;
+    const refreshPicture = async () => {
+      if (running || cancelled) return;
+      running = true;
+      try {
+        const next = await creatorService.artistProfile(account.id);
+        if (!cancelled) apply(next);
+      } catch {
+        // A transient refresh failure should not turn a successful upload into
+        // an error. The next poll can recover.
+      } finally {
+        running = false;
+      }
+    };
+
+    const timer = setInterval(() => { void refreshPicture(); }, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [account, profile?.profileImagePending, apply]);
+
+  const preparedLinks = useMemo(() => {
+    const nextErrors: Record<string, string> = {};
+    const socialLinks: ArtistSocialLink[] = [];
+
+    for (const platform of PLATFORMS) {
+      const raw = links[platform.id] ?? '';
+      if (!raw.trim()) continue;
+      const fieldError = standardLinkError(platform.id, raw);
+      if (fieldError) {
+        nextErrors[`standard:${platform.id}`] = fieldError;
+        continue;
+      }
+      socialLinks.push({ platform: platform.id, url: normalizeUrl(raw) });
+    }
+
+    for (const link of extraLinks) {
+      const name = link.name.trim();
+      const rawUrl = link.url.trim();
+      if (!name && !rawUrl) continue;
+      if (!name) nextErrors[`extra:${link.id}:name`] = 'Enter a name for this link.';
+      const urlError = generalLinkError(rawUrl);
+      if (urlError) nextErrors[`extra:${link.id}:url`] = urlError;
+      if (name && !urlError) {
+        socialLinks.push({
+          platform: `custom:${link.id}`,
+          label: name,
+          url: normalizeUrl(rawUrl),
+        });
+      }
+    }
+
+    return { socialLinks, errors: nextErrors };
+  }, [links, extraLinks]);
+
   async function save() {
     if (!account) return;
+
+    setLinkErrors(preparedLinks.errors);
+    if (Object.keys(preparedLinks.errors).length) {
+      setError('Fix the links marked below before saving.');
+      setNotice('');
+      return;
+    }
+
     setBusy(true);
     setError('');
     setNotice('');
     try {
-      const socialLinks: ArtistSocialLink[] = Object.entries(links)
-        .filter(([, url]) => url.trim())
-        .map(([platform, url]) => ({ platform, url: url.trim() }));
-
       apply(await creatorService.updateArtistProfile(account.id, {
         displayName: displayName.trim() || null,
         biography,
-        socialLinks,
+        socialLinks: preparedLinks.socialLinks,
         pinnedReleaseIds: pinned,
       }));
       setNotice('Profile saved.');
@@ -89,24 +247,30 @@ export default function ArtistProfileScreen() {
     const picked = await pickUploadCandidates('image', false);
     if (!picked.length) return;
 
+    const picture = picked[0];
     setUploadingImage(true);
+    setPictureProgress(0);
+    setPendingPictureUri(picture.uri);
     setError('');
     setNotice('');
+
     try {
-      let intentId: string | undefined;
-      await runUpload(account.id, picked[0], (_id, change) => {
-        if (change.uploadIntentId) intentId = change.uploadIntentId;
-        if (change.error) setError(change.error);
+      // Profile images have a special flow: upload the source first, then tell
+      // the profile RPC which upload intent to process. The RPC records the
+      // pending image and queues image processing atomically, avoiding the race
+      // where processing could finish before the artist was marked as waiting.
+      const intentId = await creatorService.upload(account.id, picture, setPictureProgress);
+      const next = await creatorService.updateArtistProfile(account.id, {
+        profileImageUploadIntentId: intentId,
       });
-
-      if (!intentId) throw new Error('The picture did not finish uploading.');
-
-      apply(await creatorService.updateArtistProfile(account.id, { profileImageUploadIntentId: intentId }));
-      setNotice('Picture uploaded. It appears once processing finishes.');
+      apply(next);
+      setNotice('Picture uploaded. CHC is processing it now.');
     } catch (cause) {
+      setPendingPictureUri(null);
       setError(creatorService.describeError(cause));
     } finally {
       setUploadingImage(false);
+      setPictureProgress(0);
     }
   }
 
@@ -114,6 +278,16 @@ export default function ArtistProfileScreen() {
     setPinned((current) =>
       current.includes(releaseId) ? current.filter((id) => id !== releaseId) : [...current, releaseId],
     );
+  }
+
+  function updateExtraLink(id: string, change: Partial<ExtraLink>) {
+    setExtraLinks((current) => current.map((link) => link.id === id ? { ...link, ...change } : link));
+    setLinkErrors((current) => {
+      const next = { ...current };
+      if ('name' in change) delete next[`extra:${id}:name`];
+      if ('url' in change) delete next[`extra:${id}:url`];
+      return next;
+    });
   }
 
   if (loading) return <Loading label="Loading your profile…" />;
@@ -128,6 +302,7 @@ export default function ArtistProfileScreen() {
   }
 
   const imageUrl = profile.profileImage ? resolveImageUrl(profile.profileImage.bucket, profile.profileImage.path) : null;
+  const shownImageUrl = pendingPictureUri || imageUrl;
 
   return (
     <Page>
@@ -143,18 +318,18 @@ export default function ArtistProfileScreen() {
       <Card title="Picture">
         <View style={styles.pictureRow}>
           <View style={styles.avatar}>
-            {imageUrl
-              ? <Image source={{ uri: imageUrl }} style={styles.avatarImage} resizeMode="cover" accessibilityLabel="Artist picture" />
+            {shownImageUrl
+              ? <Image source={{ uri: shownImageUrl }} style={styles.avatarImage} resizeMode="cover" accessibilityLabel="Artist picture" />
               : <Text style={styles.avatarFallback}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>}
           </View>
           <View style={styles.pictureBody}>
             <Button
-              label={uploadingImage ? 'Uploading…' : profile.profileImage ? 'Replace picture' : 'Choose picture'}
+              label={uploadingImage ? `Uploading ${Math.round(pictureProgress * 100)}%` : profile.profileImage ? 'Replace picture' : 'Choose picture'}
               busy={uploadingImage}
               onPress={() => void changePicture()}
             />
             {!!profile.profileImagePending && (
-              <Text style={uiStyles.muted}>Your new picture is being processed and will appear shortly.</Text>
+              <Text style={uiStyles.muted}>Your new picture is being processed. This preview will update automatically.</Text>
             )}
           </View>
         </View>
@@ -172,19 +347,6 @@ export default function ArtistProfileScreen() {
           <Label>Profile status</Label>
           <StatusPill status={profile.publicationStatus} />
         </View>
-      </Card>
-
-      <Card title="Links" description="Where else listeners can find you. Leave a field blank to remove it.">
-        {PLATFORMS.map((platform) => (
-          <Field
-            key={platform.id}
-            label={platform.label}
-            value={links[platform.id] ?? ''}
-            onChangeText={(url) => setLinks((current) => ({ ...current, [platform.id]: url }))}
-            placeholder={platform.placeholder}
-            autoCapitalize="none"
-          />
-        ))}
       </Card>
 
       <Card
@@ -213,7 +375,10 @@ export default function ArtistProfileScreen() {
                   {index >= 0 ? `Pinned ${index + 1}` : 'Pin'}
                 </Text>
                 <Pressable
-                  onPress={() => router.navigate({ pathname: '/release/[id]', params: { id: release.id } })}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    router.navigate({ pathname: '/release/[id]', params: { id: release.id } });
+                  }}
                   hitSlop={6}
                 >
                   <Text style={uiStyles.link}>Edit</Text>
@@ -224,6 +389,87 @@ export default function ArtistProfileScreen() {
         ) : (
           <Text style={uiStyles.muted}>You have no releases yet.</Text>
         )}
+      </Card>
+
+      <Card title="Links" description="Where else listeners can find you. Leave a standard field blank to remove it.">
+        {PLATFORMS.map((platform) => {
+          const fieldError = linkErrors[`standard:${platform.id}`] ?? '';
+          return (
+            <View key={platform.id} style={styles.linkField}>
+              <Field
+                label={platform.label}
+                value={links[platform.id] ?? ''}
+                onChangeText={(url) => {
+                  setLinks((current) => ({ ...current, [platform.id]: url }));
+                  setLinkErrors((current) => {
+                    const next = { ...current };
+                    delete next[`standard:${platform.id}`];
+                    return next;
+                  });
+                }}
+                onBlur={() => {
+                  const nextError = standardLinkError(platform.id, links[platform.id] ?? '');
+                  setLinkErrors((current) => ({ ...current, [`standard:${platform.id}`]: nextError }));
+                }}
+                placeholder={platform.placeholder}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              {!!fieldError && <Text style={uiStyles.errorDetail}>{fieldError}</Text>}
+            </View>
+          );
+        })}
+
+        {extraLinks.map((link, index) => (
+          <View key={link.id} style={styles.extraLink}>
+            <Text style={styles.extraLinkTitle}>Extra link {index + 1}</Text>
+            <Field
+              label="Name"
+              value={link.name}
+              onChangeText={(name) => updateExtraLink(link.id, { name })}
+              placeholder="e.g. Coptic Hymns Archive"
+            />
+            {!!linkErrors[`extra:${link.id}:name`] && (
+              <Text style={uiStyles.errorDetail}>{linkErrors[`extra:${link.id}:name`]}</Text>
+            )}
+            <Field
+              label="URL"
+              value={link.url}
+              onChangeText={(url) => updateExtraLink(link.id, { url })}
+              onBlur={() => {
+                const nextError = generalLinkError(link.url);
+                setLinkErrors((current) => ({ ...current, [`extra:${link.id}:url`]: nextError }));
+              }}
+              placeholder="https://example.com/your-page"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+            {!!linkErrors[`extra:${link.id}:url`] && (
+              <Text style={uiStyles.errorDetail}>{linkErrors[`extra:${link.id}:url`]}</Text>
+            )}
+            <Button
+              kind="ghost"
+              label="Remove extra link"
+              onPress={() => {
+                setExtraLinks((current) => current.filter((item) => item.id !== link.id));
+                setLinkErrors((current) => {
+                  const next = { ...current };
+                  delete next[`extra:${link.id}:name`];
+                  delete next[`extra:${link.id}:url`];
+                  return next;
+                });
+              }}
+            />
+          </View>
+        ))}
+
+        <Button
+          kind="secondary"
+          label="+ Add extra link"
+          onPress={() => setExtraLinks((current) => [...current, newExtraLink()])}
+        />
       </Card>
     </Page>
   );
@@ -240,4 +486,7 @@ const styles = StyleSheet.create({
   pinBody: { flex: 1, minWidth: 160, gap: 3 },
   pinMark: { color: COLORS.muted, fontWeight: '800', fontSize: 12 },
   pinMarkOn: { color: COLORS.goldBright },
+  linkField: { gap: 2 },
+  extraLink: { gap: SPACING.sm, padding: SPACING.md, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADII.md, backgroundColor: COLORS.black },
+  extraLinkTitle: { color: COLORS.white, fontWeight: '900', fontSize: 14 },
 });

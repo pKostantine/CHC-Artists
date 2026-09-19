@@ -45,7 +45,7 @@ export interface TrackContributor {
   role: TrackContributorRole;
 }
 
-export interface ArtistSocialLink { platform: string; url: string }
+export interface ArtistSocialLink { id?: string; platform: string; label?: string | null; url: string }
 
 export interface ArtistProfile {
   id: string;
