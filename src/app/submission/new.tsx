@@ -21,7 +21,7 @@ const MODES: { id: SubmissionMode; title: string }[] = [
 ];
 
 const MODE_HELP: Record<SubmissionMode, string> = {
-  music: 'A single, EP, or album. Add all audio tracks, name each track, then add its localized titles and credits.',
+  music: 'Add the audio tracks in order, review the guessed English/Arabic/French titles, then add credits. CHC determines Single, EP, or Album automatically.',
   learning_album: 'Full hymn recordings by a cantor for Learn & Study. Add audio recordings in order.',
   learning_lesson_set: 'Teaching lessons for one hymn. Add video or audio lessons in order.',
 };
