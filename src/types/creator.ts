@@ -142,7 +142,12 @@ export interface CreatorDraft {
   mode: SubmissionMode;
   title: string;
   description: string;
+  /** Automatically inferred from media.length; kept in the draft for compatibility with older saved form state. */
   releaseType: ReleaseType;
+  /** Listener-facing category such as Hymn or Spiritual song. */
+  musicType: string;
+  /** Recording presentation such as Studio, Live, or Instrumental. */
+  recordingType: string;
   artistId: string;
   cantorId: string;
   seasonId: string;

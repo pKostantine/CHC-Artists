@@ -20,6 +20,8 @@ export const emptyDraft = (): CreatorDraft => ({
   title: '',
   description: '',
   releaseType: 'single',
+  musicType: '',
+  recordingType: '',
   artistId: '',
   cantorId: '',
   seasonId: '',

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { File as ExpoFile } from 'expo-file-system';
 import { supabase } from '@/services/supabase';
+import { preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
 import type {
   CatalogOption,
   CatalogOptions,
@@ -312,11 +313,13 @@ export const creatorService = {
   /** Creates the submission, its catalog record, and its items, then submits it — all in one transaction. */
   createSubmission(accountId: string, draft: CreatorDraft): Promise<{ submissionId: string; status: string }> {
     const isMusic = draft.mode === 'music';
+    const releaseTitle = isMusic ? preferredLocalizedTitle(draft.localizedTitle) : draft.title.trim();
+    const inferredReleaseType = releaseTypeForTrackCount(draft.media.length);
     const items = [
       ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
       ...draft.media.map((file) => ({
         uploadIntentId: file.uploadIntentId,
-        title: isMusic ? file.title?.trim() : file.name,
+        title: isMusic ? preferredLocalizedTitle(file.localizedTitle) : file.name,
         role: 'media',
         localizedTitles: isMusic ? (file.localizedTitle ?? {}) : {},
         // Names are resolved to reusable catalogue artists by the backend.
@@ -329,9 +332,11 @@ export const creatorService = {
     return rpc('create_creator_submission_v2', {
       p_creator_account_id: accountId,
       p_mode: draft.mode,
-      p_title: draft.title,
+      p_title: releaseTitle,
       p_description: draft.description || null,
-      p_release_type: isMusic ? draft.releaseType : null,
+      p_release_type: isMusic ? inferredReleaseType : null,
+      p_music_type: isMusic ? draft.musicType.trim() || null : null,
+      p_recording_type: isMusic ? draft.recordingType.trim() || null : null,
       p_artist_id: isMusic ? draft.artistId || null : null,
       p_cantor_id: isMusic ? null : draft.cantorId || null,
       p_season_id: isMusic ? null : draft.seasonId || null,

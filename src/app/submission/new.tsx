@@ -12,6 +12,7 @@ import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, TrackC
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { droppedUploadCandidates, pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
+import { guessRecordingTypeFromFilename, hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
 
 const MODES: { id: SubmissionMode; title: string }[] = [
   { id: 'music', title: 'Music release' },
@@ -25,7 +26,7 @@ const MODE_HELP: Record<SubmissionMode, string> = {
   learning_lesson_set: 'Teaching lessons for one hymn. Add video or audio lessons in order.',
 };
 
-const LOCALES = [
+const LEARNING_LOCALES = [
   { key: 'en', label: 'English' },
   { key: 'ar', label: 'Arabic' },
   { key: 'cop', label: 'Coptic' },
@@ -100,10 +101,11 @@ const CONTRIBUTOR_ROLES: { id: TrackContributorRole; title: string }[] = [
   { id: 'artwork', title: 'Track artwork' },
 ];
 
-function TrackCredits({ file, identityName, onChange }: {
+function TrackCredits({ file, identityName, onChange, onCopyToAll }: {
   file: UploadCandidate;
   identityName: string;
   onChange: (change: Partial<UploadCandidate>) => void;
+  onCopyToAll?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const contributors = file.contributors ?? [];
@@ -180,39 +182,47 @@ function TrackCredits({ file, identityName, onChange }: {
 
             <Button label="+ Add contributor" onPress={addContributor} />
           </View>
+
+          {onCopyToAll && (
+            <Button
+              kind="secondary"
+              label="Copy these credits to all tracks"
+              onPress={onCopyToAll}
+            />
+          )}
         </View>
       )}
     </View>
   );
 }
 
-function TrackMetadata({ file, index, identityName, onChange }: {
+function TrackMetadata({ file, index, total, identityName, onChange, onCopyCreditsToAll }: {
   file: UploadCandidate;
   index: number;
+  total: number;
   identityName: string;
   onChange: (change: Partial<UploadCandidate>) => void;
+  onCopyCreditsToAll?: () => void;
 }) {
   const localized = file.localizedTitle ?? { en: '', ar: '', cop: '', fr: '' };
 
   return (
     <View style={styles.trackMetadata}>
-      <Field
-        label={`Track ${index + 1} title`}
-        value={file.title ?? ''}
-        onChangeText={(title) => onChange({ title })}
-        placeholder="Required — enter the listener-facing track name"
-      />
-
       <View style={styles.group}>
-        <Label>Localized track titles</Label>
-        <Text style={uiStyles.muted}>Optional. These belong to this track, not to the release title.</Text>
+        <Label>{`Track ${index + 1} title`}</Label>
+        <Text style={uiStyles.muted}>
+          English, Arabic, and French are optional individually; enter at least one. CHC prefilled what it could from the filename.
+        </Text>
         <View style={styles.localeGrid}>
-          {LOCALES.map(({ key, label }) => (
+          {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
             <View key={key} style={styles.localeField}>
               <Field
                 label={label}
                 value={localized[key]}
-                onChangeText={(value) => onChange({ localizedTitle: { ...localized, [key]: value } })}
+                onChangeText={(value) => {
+                  const localizedTitle = { ...localized, [key]: value };
+                  onChange({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
+                }}
                 style={key === 'ar' ? styles.rtl : undefined}
               />
             </View>
@@ -220,7 +230,12 @@ function TrackMetadata({ file, index, identityName, onChange }: {
         </View>
       </View>
 
-      <TrackCredits file={file} identityName={identityName} onChange={onChange} />
+      <TrackCredits
+        file={file}
+        identityName={identityName}
+        onChange={onChange}
+        onCopyToAll={index === 0 && total > 1 ? onCopyCreditsToAll : undefined}
+      />
     </View>
   );
 }
@@ -333,17 +348,22 @@ export default function NewSubmission() {
 
   const isMusic = draft.mode === 'music';
   const files = draft.artwork ? [draft.artwork, ...draft.media] : draft.media;
+  const inferredReleaseType = releaseTypeForTrackCount(draft.media.length);
+  const submissionTitle = isMusic ? preferredLocalizedTitle(draft.localizedTitle) : draft.title.trim();
 
   const problems: string[] = [];
   if (!account) problems.push('Your creator workspace is still loading.');
-  if (!draft.title.trim()) problems.push('Add a title.');
+  if (isMusic && !hasMusicTitle(draft.localizedTitle)) problems.push('Add the release title in at least one language.');
+  if (!isMusic && !draft.title.trim()) problems.push('Add a title.');
+  if (isMusic && !draft.musicType.trim()) problems.push('Add a music type.');
+  if (isMusic && !draft.recordingType.trim()) problems.push('Add a recording type.');
   if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
   if (!isMusic && !draft.cantorId) problems.push('Choose or create a cantor.');
   if (draft.mode === 'learning_lesson_set' && !draft.hymnId) problems.push('Choose the hymn these lessons teach.');
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
   if (isMusic) {
     draft.media.forEach((file, index) => {
-      if (!file.title?.trim()) problems.push(`Add a title for track ${index + 1}.`);
+      if (!hasMusicTitle(file.localizedTitle)) problems.push(`Add a title in at least one language for track ${index + 1}.`);
       if ((file.contributors ?? []).some((credit) => !credit.name.trim())) {
         problems.push(`Fill in or remove the unnamed contributor on track ${index + 1}.`);
       }
@@ -357,7 +377,27 @@ export default function NewSubmission() {
 
   function addMedia(picked: UploadCandidate[]) {
     if (!picked.length) return;
-    setDraft((current) => ({ ...current, media: [...current.media, ...picked] }));
+    setDraft((current) => {
+      const firstTrack = picked[0];
+      const shouldGuessReleaseTitle = current.mode === 'music'
+        && current.media.length === 0
+        && !hasMusicTitle(current.localizedTitle);
+      const localizedTitle = shouldGuessReleaseTitle
+        ? (firstTrack.localizedTitle ?? current.localizedTitle)
+        : current.localizedTitle;
+      const recordingType = current.mode === 'music' && !current.recordingType.trim()
+        ? (guessRecordingTypeFromFilename(firstTrack.name) || current.recordingType)
+        : current.recordingType;
+
+      return {
+        ...current,
+        media: [...current.media, ...picked],
+        releaseType: releaseTypeForTrackCount(current.media.length + picked.length),
+        localizedTitle,
+        title: shouldGuessReleaseTitle ? preferredLocalizedTitle(localizedTitle) : current.title,
+        recordingType,
+      };
+    });
     picked.forEach(uploadDraftFile);
   }
 
@@ -387,6 +427,28 @@ export default function NewSubmission() {
       return;
     }
     addMedia(picked);
+  }
+
+  function copyCreditsToAll(sourceFileId: string) {
+    setDraft((current) => {
+      const source = current.media.find((file) => file.id === sourceFileId);
+      if (!source) return current;
+      const stamp = Date.now();
+      return {
+        ...current,
+        media: current.media.map((file) => {
+          if (file.id === sourceFileId) return file;
+          return {
+            ...file,
+            mainArtistName: source.mainArtistName ?? '',
+            contributors: (source.contributors ?? []).map((credit, index) => ({
+              ...credit,
+              id: `${file.id}-credit-${stamp}-${index}`,
+            })),
+          };
+        }),
+      };
+    });
   }
 
   function move(fileId: string, delta: -1 | 1) {
@@ -439,7 +501,9 @@ export default function NewSubmission() {
       </Card>
 
       <Card title="Details">
-        <Field label="Title" value={draft.title} onChangeText={(title) => patch({ title })} placeholder="Shown to reviewers and, once published, to listeners" />
+        {!isMusic && (
+          <Field label="Title" value={draft.title} onChangeText={(title) => patch({ title })} placeholder="Shown to reviewers and, once published, to listeners" />
+        )}
         <Field
           label="Description"
           value={draft.description}
@@ -450,14 +514,20 @@ export default function NewSubmission() {
         />
         {isMusic ? (
           <>
-            <View style={styles.group}>
-              <Label>Release type</Label>
-              <Segmented
-                items={[{ id: 'single', title: 'Single' }, { id: 'ep', title: 'EP' }, { id: 'album', title: 'Album' }]}
-                value={draft.releaseType}
-                onChange={(releaseType) => patch({ releaseType: releaseType as CreatorDraft['releaseType'] })}
-              />
-            </View>
+            <Field
+              label="Music type"
+              value={draft.musicType}
+              onChangeText={(musicType) => patch({ musicType })}
+              placeholder="e.g. Hymn, Spiritual song, Praise"
+              hint="Describe what kind of music this release is."
+            />
+            <Field
+              label="Recording type"
+              value={draft.recordingType}
+              onChangeText={(recordingType) => patch({ recordingType })}
+              placeholder="e.g. Studio, Live, Instrumental"
+              hint="Describe how this release was recorded or presented."
+            />
             <View style={styles.group}>
               <Label>Released as</Label>
               <Text style={styles.identity}>{credits?.identityArtist?.displayName ?? account?.displayName ?? '—'}</Text>
@@ -507,20 +577,43 @@ export default function NewSubmission() {
         )}
       </Card>
 
-      <Card title="Release localized titles" description="Optional. These are for the single, EP, or album title. Each music track has its own localized titles below.">
-        <View style={styles.localeGrid}>
-          {LOCALES.map(({ key, label }) => (
-            <View key={key} style={styles.localeField}>
-              <Field
-                label={label}
-                value={draft.localizedTitle[key]}
-                onChangeText={(value) => patch({ localizedTitle: { ...draft.localizedTitle, [key]: value } })}
-                style={key === 'ar' ? styles.rtl : undefined}
-              />
-            </View>
-          ))}
-        </View>
-      </Card>
+      {isMusic ? (
+        <Card
+          title="Release title"
+          description="Enter English, Arabic, or French. Each field is optional, but at least one is required. When possible, the first audio filename is used as a starting guess."
+        >
+          <View style={styles.localeGrid}>
+            {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
+              <View key={key} style={styles.localeField}>
+                <Field
+                  label={label}
+                  value={draft.localizedTitle[key]}
+                  onChangeText={(value) => {
+                    const localizedTitle = { ...draft.localizedTitle, [key]: value };
+                    patch({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
+                  }}
+                  style={key === 'ar' ? styles.rtl : undefined}
+                />
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : (
+        <Card title="Localized title" description="Optional translations for this Learn & Study item.">
+          <View style={styles.localeGrid}>
+            {LEARNING_LOCALES.map(({ key, label }) => (
+              <View key={key} style={styles.localeField}>
+                <Field
+                  label={label}
+                  value={draft.localizedTitle[key]}
+                  onChangeText={(value) => patch({ localizedTitle: { ...draft.localizedTitle, [key]: value } })}
+                  style={key === 'ar' ? styles.rtl : undefined}
+                />
+              </View>
+            ))}
+          </View>
+        </Card>
+      )}
 
       <Card title="Artwork & media" description="Files upload privately as soon as you choose them. Nothing is sent to CHC review until you press Submit.">
         <FileDropZone
@@ -559,7 +652,9 @@ export default function NewSubmission() {
               <TrackMetadata
                 file={file}
                 index={index}
+                total={draft.media.length}
                 identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
+                onCopyCreditsToAll={() => copyCreditsToAll(file.id)}
                 onChange={(change) => setDraft((current) => ({
                   ...current,
                   media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
@@ -573,10 +668,10 @@ export default function NewSubmission() {
       </Card>
 
       <Card title="Review & submit">
-        <Text style={styles.previewTitle}>{draft.title || 'Untitled submission'}</Text>
+        <Text style={styles.previewTitle}>{submissionTitle || 'Untitled submission'}</Text>
         <Text style={uiStyles.muted}>
           {MODES.find((m) => m.id === draft.mode)?.title}
-          {isMusic ? ` • ${draft.releaseType.toUpperCase()}` : ''} • {draft.media.length} file{draft.media.length === 1 ? '' : 's'}
+          {isMusic ? ` • ${inferredReleaseType.toUpperCase()}` : ''} • {draft.media.length} file{draft.media.length === 1 ? '' : 's'}
           {draft.artwork ? ' • artwork' : ''}
         </Text>
 

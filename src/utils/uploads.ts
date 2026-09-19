@@ -1,6 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { creatorService } from '@/services/creatorService';
 import type { CreatorDraft, MediaKind, UploadCandidate } from '@/types/creator';
+import { guessLocalizedTitlesFromFilename, preferredLocalizedTitle } from '@/utils/titles';
 
 const PICKER_TYPES: Record<'audio' | 'video' | 'image' | 'lesson', string[]> = {
   audio: ['audio/*'],
@@ -28,6 +29,9 @@ function freshCandidate(input: {
   sourceFile?: any;
 }): UploadCandidate {
   const fallback: MediaKind = input.kind === 'image' ? 'image' : input.kind === 'audio' ? 'audio' : 'video';
+  const guessedTitles = input.kind === 'image'
+    ? { en: '', ar: '', cop: '', fr: '' }
+    : guessLocalizedTitlesFromFilename(input.name);
   return {
     id: input.id,
     name: input.name,
@@ -39,8 +43,8 @@ function freshCandidate(input: {
     progress: 0,
     uploading: false,
     uploaded: false,
-    title: '',
-    localizedTitle: { en: '', ar: '', cop: '', fr: '' },
+    title: preferredLocalizedTitle(guessedTitles),
+    localizedTitle: guessedTitles,
     mainArtistName: '',
     contributors: [],
   };
