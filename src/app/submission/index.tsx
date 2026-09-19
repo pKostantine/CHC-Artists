@@ -19,7 +19,8 @@ export default function SubmissionsDashboard() {
   // Fully approved/processed music moves to the Releases section. Published
   // work lives there too. Submissions is only the working/review inbox.
   const activeSubmissions = submissions.filter((submission) =>
-    submission.status !== 'approved' && submission.status !== 'published',
+    submission.submissionType !== 'music_release'
+    || (submission.status !== 'approved' && submission.status !== 'published'),
   );
   const needsAction = activeSubmissions.filter((s) => s.status === 'changes_requested');
   const draftInProgress = Boolean(draft.title || draft.media.length || draft.artwork);
