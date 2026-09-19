@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
-import { Banner, Button, Card, Chips, Dropdown, Field, Label, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
+import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
+import { Banner, Button, Card, Dropdown, Field, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
 import { resolveImageUrl } from '@/services/mediaService';
-import type { CreatorRelease, CreditOptions, LocalizedMetadata, UploadCandidate } from '@/types/creator';
+import type { CreatorRelease, CreditOptions, LocalizedMetadata, TrackContributor, UploadCandidate } from '@/types/creator';
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle } from '@/utils/titles';
@@ -17,8 +18,9 @@ interface EditableTrack {
   key: string;
   id?: string;
   title: string;
-  mainArtistId: string;
-  featuredArtistIds: string[];
+  localizedTitle: LocalizedMetadata;
+  mainArtistName: string;
+  contributors: TrackContributor[];
   upload?: UploadCandidate;
   publicationStatus?: string;
 }
@@ -110,8 +112,9 @@ export default function EditRelease() {
       key: track.id,
       id: track.id,
       title: track.title,
-      mainArtistId: track.mainArtist?.id ?? '',
-      featuredArtistIds: track.featuredArtists.map((artist) => artist.id),
+      localizedTitle: track.localizedTitle ?? { en: track.title, ar: '', cop: '', fr: '' },
+      mainArtistName: track.mainArtistName ?? '',
+      contributors: track.contributors ?? [],
       publicationStatus: track.publicationStatus,
     })));
   }, []);
@@ -146,8 +149,9 @@ export default function EditRelease() {
       ...picked.map((file) => ({
         key: file.id,
         title: preferredLocalizedTitle(file.localizedTitle) || file.name.replace(/\.[a-z0-9]+$/i, ''),
-        mainArtistId: '',
-        featuredArtistIds: [],
+        localizedTitle: file.localizedTitle ?? { en: '', ar: '', cop: '', fr: '' },
+        mainArtistName: file.mainArtistName ?? '',
+        contributors: file.contributors ?? [],
         upload: file,
       })),
     ]);
@@ -183,6 +187,26 @@ export default function EditRelease() {
       if (target < 0 || target >= next.length) return current;
       [next[index], next[target]] = [next[target], next[index]];
       return next;
+    });
+  }
+
+  function copyCreditsToAll(sourceKey: string) {
+    setTracks((current) => {
+      const source = current.find((track) => track.key === sourceKey);
+      if (!source) return current;
+      const stamp = Date.now();
+      return current.map((track) => (
+        track.key === sourceKey
+          ? track
+          : {
+              ...track,
+              mainArtistName: source.mainArtistName,
+              contributors: source.contributors.map((credit, index) => ({
+                ...credit,
+                id: `${stamp}-${index}-${track.key}`,
+              })),
+            }
+      ));
     });
   }
 
@@ -256,6 +280,18 @@ export default function EditRelease() {
     if (!hasMusicTitle(localizedTitle)) { setError('Add a release title in English, Arabic, or French.'); return; }
     if (!musicTypeChoice || !musicType.trim()) { setError('Choose a music type.'); return; }
     if (!recordingTypeChoice || !recordingType.trim()) { setError('Choose a recording type.'); return; }
+    const invalidTrackIndex = tracks.findIndex((track) => !hasMusicTitle(track.localizedTitle));
+    if (invalidTrackIndex >= 0) {
+      setError(`Add a title in at least one language for track ${invalidTrackIndex + 1}.`);
+      return;
+    }
+    const unnamedContributorIndex = tracks.findIndex((track) =>
+      track.contributors.some((credit) => !credit.name.trim()),
+    );
+    if (unnamedContributorIndex >= 0) {
+      setError(`Fill in or remove the unnamed contributor on track ${unnamedContributorIndex + 1}.`);
+      return;
+    }
 
     setBusy(true);
     setError('');
@@ -281,9 +317,10 @@ export default function EditRelease() {
         tracks: tracks.map((track) => ({
           id: track.id,
           uploadIntentId: track.upload?.uploadIntentId,
-          title: track.title,
-          mainArtistId: track.mainArtistId || null,
-          featuredArtistIds: track.featuredArtistIds,
+          title: preferredLocalizedTitle(track.localizedTitle) || track.title,
+          localizedTitle: track.localizedTitle,
+          mainArtistName: track.mainArtistName,
+          contributors: track.contributors,
         })),
       });
       apply(next);
@@ -307,8 +344,7 @@ export default function EditRelease() {
     );
   }
 
-  const artists = credits?.creditableArtists ?? [];
-  const identityId = credits?.identityArtist?.id ?? '';
+  const identityName = credits?.identityArtist?.displayName ?? account?.displayName ?? release.primaryArtist?.displayName ?? '';
   const currentCover = release.cover
     ? resolveImageUrl(release.cover.bucket, release.cover.path, release.cover.version ?? release.cover.assetId)
     : null;
@@ -451,18 +487,12 @@ export default function EditRelease() {
           <View key={track.key} style={styles.track}>
             <View style={uiStyles.row}>
               <View style={styles.trackBody}>
-                <Field
-                  label={`Track ${index + 1}`}
-                  value={track.title}
-                  onChangeText={(value) => patchTrack(track.key, { title: value })}
-                />
-                {track.upload && (
+                {track.upload ? (
                   <Text style={track.upload.error ? uiStyles.error : uiStyles.muted}>
                     {fileSize(track.upload.size)} • {uploadLabel(track.upload)}
                   </Text>
-                )}
-                {!track.upload && !!track.publicationStatus && (
-                  <Text style={uiStyles.muted}>Already on this release</Text>
+                ) : (
+                  <Text style={uiStyles.muted}>Track {index + 1} • already on this release</Text>
                 )}
               </View>
               <View style={styles.trackActions}>
@@ -484,43 +514,14 @@ export default function EditRelease() {
               </View>
             </View>
 
-            <View style={styles.creditsBody}>
-              <View style={styles.group}>
-                <Label>Main artist</Label>
-                <Chips
-                  items={artists.map((artist) => ({
-                    id: artist.id,
-                    title: artist.id === identityId ? `${artist.displayName} (you)` : artist.displayName,
-                  }))}
-                  value={track.mainArtistId || identityId}
-                  onChange={(id) => patchTrack(track.key, { mainArtistId: id })}
-                />
-              </View>
-              <View style={styles.group}>
-                <Label>Featured</Label>
-                <View style={styles.featureRow}>
-                  {artists
-                    .filter((artist) => artist.id !== (track.mainArtistId || identityId))
-                    .map((artist) => {
-                      const on = track.featuredArtistIds.includes(artist.id);
-                      return (
-                        <Pressable
-                          key={artist.id}
-                          onPress={() => patchTrack(track.key, {
-                            featuredArtistIds: on
-                              ? track.featuredArtistIds.filter((x) => x !== artist.id)
-                              : [...track.featuredArtistIds, artist.id],
-                          })}
-                          accessibilityState={{ selected: on }}
-                          style={[styles.featureChip, on && styles.featureChipOn]}
-                        >
-                          <Text style={[styles.featureText, on && styles.featureTextOn]}>{artist.displayName}</Text>
-                        </Pressable>
-                      );
-                    })}
-                </View>
-              </View>
-            </View>
+            <TrackMetadataEditor
+              value={track}
+              index={index}
+              total={tracks.length}
+              identityName={identityName}
+              onCopyCreditsToAll={() => copyCreditsToAll(track.key)}
+              onChange={(change) => patchTrack(track.key, change)}
+            />
           </View>
         ))}
 
@@ -567,16 +568,9 @@ const styles = StyleSheet.create({
   coverImage: { width: '100%', height: '100%' },
   coverFallback: { color: COLORS.muted, fontWeight: '800' },
   artworkActions: { flex: 1, minWidth: 220, gap: SPACING.sm },
-  group: { gap: 8 },
   track: { gap: SPACING.sm, paddingBottom: SPACING.md },
   trackBody: { flex: 1, minWidth: 200, gap: 4 },
   trackActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  creditsBody: { gap: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
-  featureRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  featureChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: RADII.pill, borderWidth: 1, borderColor: COLORS.border },
-  featureChipOn: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
-  featureText: { color: COLORS.muted, fontWeight: '700', fontSize: 13 },
-  featureTextOn: { color: COLORS.goldBright },
   order: { color: COLORS.goldBright, fontSize: 20 },
   dim: { opacity: 0.25 },
 });
