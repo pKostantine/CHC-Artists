@@ -86,10 +86,15 @@ function ReorderableRow<Item>({
 }) {
   const [translateY] = useState(() => new Animated.Value(0));
   const indexRef = useRef(index);
+  const disabledRef = useRef(disabled);
 
   useEffect(() => {
     indexRef.current = index;
   }, [index]);
+
+  useEffect(() => {
+    disabledRef.current = disabled;
+  }, [disabled]);
 
   useEffect(() => {
     if (lifted || !dragging) {
@@ -107,8 +112,8 @@ function ReorderableRow<Item>({
   // Same responder architecture as CHC's music queue: create the responder
   // once and call through a ref so moving state never rebuilds the gesture.
   const [responder] = useState(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !disabled,
-    onMoveShouldSetPanResponder: () => !disabled,
+    onStartShouldSetPanResponder: () => !disabledRef.current,
+    onMoveShouldSetPanResponder: () => !disabledRef.current,
     onPanResponderTerminationRequest: () => false,
     onPanResponderGrant: () => handlers.current.start(indexRef.current),
     onPanResponderMove: (_event: GestureResponderEvent, gesture: PanResponderGestureState) => {
@@ -138,7 +143,7 @@ function ReorderableRow<Item>({
         lifted && styles.lifted,
       ]}
     >
-      {renderItem(item, index, dragHandle, dragging)}
+      {renderItem(item, index, dragHandle, lifted)}
     </Animated.View>
   );
 }
