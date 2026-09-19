@@ -73,10 +73,14 @@ function draftRows(drafts: Record<string, LyricDraft | null>): EditableMultiling
 
   return Array.from({ length: maxLines }, (_, index) => {
     const existingLines = LOCALES
-      .map((item) => ({ locale: item.value, line: drafts[item.value]?.lines[index] }))
-      .filter((item): item is { locale: LocaleCode; line: EditableLyricLine } => Boolean(item.line));
+      .map((item) => ({ locale: item.value, draft: drafts[item.value], line: drafts[item.value]?.lines[index] }))
+      .filter((item): item is { locale: LocaleCode; draft: LyricDraft; line: EditableLyricLine } => Boolean(item.draft && item.line));
 
-    const timingLine = existingLines.find(({ line }) => line.startMs !== null) ?? existingLines[0];
+    const publishedLines = existingLines.filter(({ draft }) => draft.publicationStatus === 'published');
+    const timingLine = publishedLines.find(({ line }) => line.startMs !== null)
+      ?? publishedLines[0]
+      ?? existingLines.find(({ line }) => line.startMs !== null)
+      ?? existingLines[0];
     const lineIds: Record<string, string> = {};
     const texts: Record<string, string> = {};
 
