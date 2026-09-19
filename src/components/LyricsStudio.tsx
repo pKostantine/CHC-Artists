@@ -152,9 +152,12 @@ export function LyricsStudio() {
   const timedCount = useMemo(() => rows.filter((row) => row.startMs !== null).length, [rows]);
   const nextUntimedIndex = useMemo(() => rows.findIndex((row) => row.startMs === null), [rows]);
   const progress = status.duration > 0 ? Math.min(1, Math.max(0, status.currentTime / status.duration)) : 0;
+  const publishedLocales = LOCALES
+    .map((item) => item.value)
+    .filter((locale) => languageStates[locale] === 'published');
   const publishedSelected = selectedLocales.filter((locale) => languageStates[locale] === 'published');
   const editableSelected = selectedLocales.filter((locale) => languageStates[locale] !== 'published');
-  const structureEditable = publishedSelected.length === 0;
+  const structureEditable = publishedLocales.length === 0;
 
   useEffect(() => {
     listEditableTracks()
@@ -714,10 +717,11 @@ export function LyricsStudio() {
             </View>
           </View>
 
-          {publishedSelected.length > 0 && (
+          {publishedLocales.length > 0 && (
             <Banner tone="info">
-              {publishedSelected.map(localeLabel).join(', ')} {publishedSelected.length === 1 ? 'is' : 'are'} already published and shown read-only.
-              The shared order and timestamps are locked while a published language is selected so its live timing cannot be changed accidentally.
+              {publishedLocales.map(localeLabel).join(', ')} {publishedLocales.length === 1 ? 'is' : 'are'} already published.
+              Published lyrics remain the timing source for this track, so the shared order and timestamps are locked while you add or edit other languages.
+              {publishedSelected.length ? ' The published language text is shown read-only below.' : ''}
             </Banner>
           )}
 
