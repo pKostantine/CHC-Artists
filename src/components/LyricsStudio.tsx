@@ -283,6 +283,20 @@ export function LyricsStudio() {
 
   function toggleLocale(locale: LocaleCode) {
     setMessage(null);
+
+    // If a language is being hidden immediately after an edit, persist that
+    // language first instead of letting the autosave debounce lose it.
+    if (selectedLocales.includes(locale) && dirty && trackId) {
+      void saveLyricDraft({
+        trackId,
+        locale,
+        description: descriptions[locale]?.trim() || null,
+        lines: editableLinesForLocale(rows, locale),
+      }).catch((error) => {
+        setMessage({ tone: 'error', text: errorText(error, 'Could not autosave that lyric language.') });
+      });
+    }
+
     setSelectedLocales((current) => {
       if (current.includes(locale)) {
         if (current.length === 1) {
@@ -896,13 +910,7 @@ export function LyricsStudio() {
 
               {!rows.length && (
                 <View style={styles.emptySync}>
-                  <Text style={styles.muted}>Paste language lines above or add a blank synced line here to start.</Text>
-                  <Pressable
-                    style={styles.secondaryButton}
-                    onPress={addLine}
-                  >
-                    <Text style={styles.secondaryButtonText}>+ Add first line</Text>
-                  </Pressable>
+                  <Text style={styles.muted}>Paste language lines above or use the Add line button below to start.</Text>
                 </View>
               )}
             </>
