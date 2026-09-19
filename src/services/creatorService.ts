@@ -336,7 +336,7 @@ export const creatorService = {
           : [],
       })),
     ];
-    return rpc('create_creator_submission_v2', {
+    return rpc('create_creator_submission_v3', {
       p_creator_account_id: accountId,
       p_mode: draft.mode,
       p_title: releaseTitle,
@@ -350,7 +350,8 @@ export const creatorService = {
       p_hymn_id: draft.mode === 'learning_lesson_set' ? draft.hymnId || null : null,
       p_localized_titles: draft.localizedTitle,
       p_items: items,
-      p_scheduled_release_at: isMusic ? toIsoOrNull(draft.scheduledReleaseAt) : null,
+      p_release_timing_mode: isMusic ? draft.releaseTimingMode : 'asap',
+      p_scheduled_release_at: isMusic && draft.releaseTimingMode === 'scheduled' ? toIsoOrNull(draft.scheduledReleaseAt) : null,
       p_original_release_date: isMusic ? nullIfBlank(draft.originalReleaseDate) : null,
     });
   },
@@ -437,6 +438,7 @@ export const creatorService = {
   async updateRelease(releaseId: string, patch: {
     title?: string | null;
     description?: string | null;
+    releaseTimingMode?: 'asap' | 'scheduled';
     scheduledReleaseAt?: string | null;
     originalReleaseDate?: string | null;
     clearOriginalReleaseDate?: boolean;
@@ -453,10 +455,11 @@ export const creatorService = {
     }[] | null;
     coverUploadIntentId?: string | null;
   }): Promise<CreatorRelease> {
-    return rpc<CreatorRelease>('update_creator_release_v2', {
+    return rpc<CreatorRelease>('update_creator_release_v3', {
       p_release_id: releaseId,
       p_title: patch.title ?? null,
       p_description: patch.description ?? null,
+      p_release_timing_mode: patch.releaseTimingMode ?? null,
       p_scheduled_release_at: patch.scheduledReleaseAt ? toIsoOrNull(patch.scheduledReleaseAt) : null,
       p_original_release_date: nullIfBlank(patch.originalReleaseDate ?? ''),
       p_clear_original_release_date: Boolean(patch.clearOriginalReleaseDate),
