@@ -53,11 +53,11 @@ export interface ArtistProfile {
   sortName: string | null;
   biography: string | null;
   publicationStatus: PublicationStatus;
-  profileImage: { assetId: string; bucket: string; path: string } | null;
+  profileImage: { assetId: string; bucket: string; path: string; version?: number | string | null } | null;
   /** Set while a newly uploaded picture is still being processed. */
   profileImagePending: string | null;
   socialLinks: ArtistSocialLink[];
-  pinnedReleases: { id: string; title: string; releaseType: ReleaseType; publicationStatus: PublicationStatus }[];
+  pinnedReleases: { id: string; title: string; releaseType: ReleaseType; publicationStatus: PublicationStatus; displayDate?: string | null }[];
   releases: { id: string; title: string; releaseType: ReleaseType; publicationStatus: PublicationStatus; displayDate: string | null }[];
 }
 
@@ -73,6 +73,24 @@ export interface ReleaseTrack {
   featuredArtists: CreditArtist[];
 }
 
+export interface CreatorReleaseSummary {
+  id: string;
+  title: string;
+  releaseType: ReleaseType;
+  publicationStatus: PublicationStatus;
+  musicType: string | null;
+  recordingType: string | null;
+  scheduledReleaseAt: string | null;
+  originalReleaseDate: string | null;
+  displayDate: string | null;
+  submissionId: string | null;
+  submissionStatus: PublicationStatus | null;
+  mediaReady: boolean;
+  trackCount: number;
+  releaseState: 'ready' | 'released';
+  cover: { assetId: string; bucket: string; path: string; version?: number | string | null } | null;
+}
+
 export interface CreatorRelease {
   id: string;
   title: string;
@@ -85,7 +103,7 @@ export interface CreatorRelease {
   displayDate: string | null;
   earliestReleaseAt: string;
   primaryArtist: CreditArtist | null;
-  cover: { assetId: string; bucket: string; path: string } | null;
+  cover: { assetId: string; bucket: string; path: string; version?: number | string | null } | null;
   localizations: { locale: string; title: string }[];
   tracks: ReleaseTrack[];
 }

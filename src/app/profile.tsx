@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { Banner, Button, Card, Field, Label, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -150,7 +150,12 @@ export default function ArtistProfileScreen() {
     }
   }, [account, apply]);
 
-  useEffect(() => { void load(); }, [load]);
+  // Expo Router can keep this screen mounted while the artist visits another
+  // section. Refresh on every focus so a newly processed profile image and any
+  // profile edits never come back as stale cached state.
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
 
   // Profile pictures are processed asynchronously. Poll only while one is
   // pending so the finished image replaces the local preview automatically.
@@ -301,7 +306,7 @@ export default function ArtistProfileScreen() {
     );
   }
 
-  const imageUrl = profile.profileImage ? resolveImageUrl(profile.profileImage.bucket, profile.profileImage.path) : null;
+  const imageUrl = profile.profileImage ? resolveImageUrl(profile.profileImage.bucket, profile.profileImage.path, profile.profileImage.version ?? profile.profileImage.assetId) : null;
   const shownImageUrl = pendingPictureUri || imageUrl;
 
   return (
@@ -319,7 +324,13 @@ export default function ArtistProfileScreen() {
         <View style={styles.pictureRow}>
           <View style={styles.avatar}>
             {shownImageUrl
-              ? <Image source={{ uri: shownImageUrl }} style={styles.avatarImage} resizeMode="cover" accessibilityLabel="Artist picture" />
+              ? <Image
+                  key={profile.profileImage ? `${profile.profileImage.assetId}-${profile.profileImage.version ?? ''}` : pendingPictureUri ?? 'pending'}
+                  source={{ uri: shownImageUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                  accessibilityLabel="Artist picture"
+                />
               : <Text style={styles.avatarFallback}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>}
           </View>
           <View style={styles.pictureBody}>
@@ -374,15 +385,6 @@ export default function ArtistProfileScreen() {
                 <Text style={[styles.pinMark, index >= 0 && styles.pinMarkOn]}>
                   {index >= 0 ? `Pinned ${index + 1}` : 'Pin'}
                 </Text>
-                <Pressable
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    router.navigate({ pathname: '/release/[id]', params: { id: release.id } });
-                  }}
-                  hitSlop={6}
-                >
-                  <Text style={uiStyles.link}>Edit</Text>
-                </Pressable>
               </Pressable>
             );
           })

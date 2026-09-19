@@ -7,7 +7,8 @@ import { useWorkspace } from '@/context/WorkspaceContext';
 import { supabase } from '@/services/supabase';
 
 const SECTIONS: { href: Href; match: string; label: string; description: string }[] = [
-  { href: '/submission', match: '/submission', label: 'Submissions', description: 'Releases, albums & lessons' },
+  { href: '/submission', match: '/submission', label: 'Submissions', description: 'Drafts, review & requested changes' },
+  { href: '/releases', match: '/releases', label: 'Releases', description: 'Ready and released music' },
   { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', description: 'Synchronized lyrics' },
   { href: '/profile', match: '/profile', label: 'Artist profile', description: 'Picture, bio & links' },
 ];
@@ -25,7 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const wide = width >= WIDE;
 
   const nav = SECTIONS.map((section) => {
-    const active = pathname === section.match || pathname.startsWith(`${section.match}/`);
+    const active = pathname === section.match || pathname.startsWith(`${section.match}/`) || (section.match === '/releases' && pathname.startsWith('/release/'));
     return (
       <Pressable
         key={section.match}

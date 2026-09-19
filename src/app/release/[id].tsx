@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Banner, Button, Card, Chips, Field, Label, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
+import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
+import { Banner, Button, Card, Chips, Dropdown, Field, Label, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
-import type { CreatorRelease, CreditOptions, UploadCandidate } from '@/types/creator';
+import { resolveImageUrl } from '@/services/mediaService';
+import type { CreatorRelease, CreditOptions, LocalizedMetadata, UploadCandidate } from '@/types/creator';
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
+import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle } from '@/utils/titles';
 import { pickUploadCandidates, runUpload, uploadsBlocking } from '@/utils/uploads';
 
-/** A track as the editor holds it: either an existing one or a pending upload. */
 interface EditableTrack {
   key: string;
   id?: string;
@@ -21,6 +23,51 @@ interface EditableTrack {
   publicationStatus?: string;
 }
 
+const MUSIC_TYPE_OPTIONS = [
+  { id: 'hymn', title: 'Hymns' },
+  { id: 'spiritual_song', title: 'Spiritual Songs' },
+  { id: 'other', title: 'Other' },
+];
+
+const RECORDING_TYPE_OPTIONS = [
+  { id: 'studio', title: 'Studio' },
+  { id: 'live', title: 'Live' },
+  { id: 'instrumental', title: 'Instrumental' },
+  { id: 'other', title: 'Other' },
+];
+
+function musicTypeOption(value?: string | null): string {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'hymn' || normalized === 'hymns') return 'hymn';
+  if (normalized === 'spiritual song' || normalized === 'spiritual songs') return 'spiritual_song';
+  return normalized ? 'other' : '';
+}
+
+function recordingTypeOption(value?: string | null): string {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === 'studio') return 'studio';
+  if (normalized === 'live') return 'live';
+  if (normalized === 'instrumental') return 'instrumental';
+  return normalized ? 'other' : '';
+}
+
+function localDateTimeValue(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16).replace('T', ' ');
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16).replace('T', ' ');
+}
+
+function localizedTitlesFor(release: CreatorRelease): LocalizedMetadata {
+  const localized: LocalizedMetadata = { en: '', ar: '', cop: '', fr: '' };
+  for (const entry of release.localizations) {
+    if (entry.locale in localized) localized[entry.locale as keyof LocalizedMetadata] = entry.title;
+  }
+  if (!localized.en && !localized.ar && !localized.fr) localized.en = release.title;
+  return localized;
+}
+
 export default function EditRelease() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const releaseId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -29,10 +76,16 @@ export default function EditRelease() {
   const [release, setRelease] = useState<CreatorRelease | null>(null);
   const [credits, setCredits] = useState<CreditOptions | null>(null);
   const [tracks, setTracks] = useState<EditableTrack[]>([]);
-  const [title, setTitle] = useState('');
+  const [localizedTitle, setLocalizedTitle] = useState<LocalizedMetadata>({ en: '', ar: '', cop: '', fr: '' });
   const [description, setDescription] = useState('');
+  const [musicType, setMusicType] = useState('');
+  const [musicTypeChoice, setMusicTypeChoice] = useState('');
+  const [recordingType, setRecordingType] = useState('');
+  const [recordingTypeChoice, setRecordingTypeChoice] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [initialScheduledAt, setInitialScheduledAt] = useState('');
   const [originalDate, setOriginalDate] = useState('');
+  const [coverUpload, setCoverUpload] = useState<UploadCandidate | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [deletingTrackKey, setDeletingTrackKey] = useState<string | null>(null);
@@ -41,11 +94,18 @@ export default function EditRelease() {
   const [notice, setNotice] = useState('');
 
   const apply = useCallback((next: CreatorRelease) => {
+    const nextScheduled = localDateTimeValue(next.scheduledReleaseAt);
     setRelease(next);
-    setTitle(next.title);
+    setLocalizedTitle(localizedTitlesFor(next));
     setDescription(next.description ?? '');
-    setScheduledAt(next.scheduledReleaseAt ? next.scheduledReleaseAt.slice(0, 10) : '');
+    setMusicType(next.musicType ?? '');
+    setMusicTypeChoice(musicTypeOption(next.musicType));
+    setRecordingType(next.recordingType ?? '');
+    setRecordingTypeChoice(recordingTypeOption(next.recordingType));
+    setScheduledAt(nextScheduled);
+    setInitialScheduledAt(nextScheduled);
     setOriginalDate(next.originalReleaseDate ?? '');
+    setCoverUpload(null);
     setTracks(next.tracks.map((track) => ({
       key: track.id,
       id: track.id,
@@ -85,7 +145,7 @@ export default function EditRelease() {
       ...current,
       ...picked.map((file) => ({
         key: file.id,
-        title: file.name.replace(/\.[a-z0-9]+$/i, ''),
+        title: preferredLocalizedTitle(file.localizedTitle) || file.name.replace(/\.[a-z0-9]+$/i, ''),
         mainArtistId: '',
         featuredArtistIds: [],
         upload: file,
@@ -93,12 +153,23 @@ export default function EditRelease() {
     ]);
 
     for (const file of picked) {
-      void runUpload(account.id, file, (id, change) => {
+      void runUpload(account.id, file, 'music', (id, change) => {
         setTracks((current) => current.map((track) =>
           track.upload?.id === id ? { ...track, upload: { ...track.upload, ...change } as UploadCandidate } : track,
         ));
       });
     }
+  }
+
+  async function changeArtwork() {
+    if (!account) return;
+    const picked = await pickUploadCandidates('image', false);
+    if (!picked.length) return;
+    const file = picked[0];
+    setCoverUpload(file);
+    void runUpload(account.id, file, 'music', (id, change) => {
+      setCoverUpload((current) => current?.id === id ? { ...current, ...change } : current);
+    });
   }
 
   function patchTrack(key: string, change: Partial<EditableTrack>) {
@@ -165,31 +236,48 @@ export default function EditRelease() {
     try {
       await creatorService.deleteRelease(releaseId);
       await refresh();
-      router.replace('/profile');
+      router.replace('/releases');
     } catch (cause) {
       setError(creatorService.describeError(cause));
       setDeletingRelease(false);
     }
   }
 
-  const pendingUploads = tracks.map((track) => track.upload).filter(Boolean) as UploadCandidate[];
-  const blocking = pendingUploads.length ? uploadsBlocking(pendingUploads) : null;
+  const uploadFiles = useMemo(() => {
+    const trackUploads = tracks.map((track) => track.upload).filter(Boolean) as UploadCandidate[];
+    return coverUpload ? [...trackUploads, coverUpload] : trackUploads;
+  }, [tracks, coverUpload]);
+  const blocking = uploadFiles.length ? uploadsBlocking(uploadFiles) : null;
 
   async function save() {
     if (!releaseId) return;
     if (blocking) { setError(blocking); return; }
     if (!tracks.length) { setError('A release needs at least one track.'); return; }
+    if (!hasMusicTitle(localizedTitle)) { setError('Add a release title in English, Arabic, or French.'); return; }
+    if (!musicTypeChoice || !musicType.trim()) { setError('Choose a music type.'); return; }
+    if (!recordingTypeChoice || !recordingType.trim()) { setError('Choose a recording type.'); return; }
 
     setBusy(true);
     setError('');
     setNotice('');
     try {
+      const canonicalTitle = preferredLocalizedTitle(localizedTitle);
       const next = await creatorService.updateRelease(releaseId, {
-        title: title.trim() || null,
+        title: canonicalTitle,
         description,
-        scheduledReleaseAt: scheduledAt || null,
+        // Do not re-validate an unchanged scheduled date merely because the
+        // artist edited another field. A changed date still obeys the 48-hour rule.
+        scheduledReleaseAt: scheduledAt !== initialScheduledAt ? scheduledAt || null : null,
         originalReleaseDate: originalDate || null,
         clearOriginalReleaseDate: !originalDate,
+        localizedTitles: {
+          en: localizedTitle.en,
+          ar: localizedTitle.ar,
+          fr: localizedTitle.fr,
+        },
+        musicType,
+        recordingType,
+        coverUploadIntentId: coverUpload?.uploadIntentId ?? null,
         tracks: tracks.map((track) => ({
           id: track.id,
           uploadIntentId: track.upload?.uploadIntentId,
@@ -213,7 +301,7 @@ export default function EditRelease() {
   if (!release) {
     return (
       <Page>
-        <Pressable onPress={() => router.back()} hitSlop={8}><Text style={uiStyles.link}>‹ Back</Text></Pressable>
+        <Pressable onPress={() => router.replace('/releases')} hitSlop={8}><Text style={uiStyles.link}>‹ Releases</Text></Pressable>
         <Card title="Could not load this release" description={error || 'Release not found.'} />
       </Page>
     );
@@ -221,10 +309,15 @@ export default function EditRelease() {
 
   const artists = credits?.creditableArtists ?? [];
   const identityId = credits?.identityArtist?.id ?? '';
+  const currentCover = release.cover
+    ? resolveImageUrl(release.cover.bucket, release.cover.path, release.cover.version ?? release.cover.assetId)
+    : null;
+  const shownCover = coverUpload?.uri || currentCover;
+  const minimumReleaseDate = release.earliestReleaseAt ? new Date(release.earliestReleaseAt) : undefined;
 
   return (
     <Page>
-      <Pressable onPress={() => router.back()} hitSlop={8}><Text style={uiStyles.link}>‹ Back</Text></Pressable>
+      <Pressable onPress={() => router.replace('/releases')} hitSlop={8}><Text style={uiStyles.link}>‹ Releases</Text></Pressable>
 
       <PageHeader
         title={release.title}
@@ -247,32 +340,112 @@ export default function EditRelease() {
       {!!error && <Banner tone="error">{error}</Banner>}
 
       <Banner tone="info">
-        Editing a release sends it back to CHC for review. Anything already published stays live until
-        the new version is approved.
+        Editing a release sends the new version back to CHC for review. Anything already published stays live until the edit is approved.
       </Banner>
 
-      <Card title="Details">
-        <Field label="Title" value={title} onChangeText={setTitle} />
+      <Card
+        title="Release title"
+        description="Edit the listener-facing title in any of the supported languages. At least one is required."
+      >
+        <View style={styles.localeGrid}>
+          {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
+            <View key={key} style={styles.localeField}>
+              <Field
+                label={label}
+                value={localizedTitle[key]}
+                onChangeText={(value) => setLocalizedTitle((current) => ({ ...current, [key]: value }))}
+                style={key === 'ar' ? styles.rtl : undefined}
+              />
+            </View>
+          ))}
+        </View>
+      </Card>
+
+      <Card title="Artwork" description="Replace the cover art for this release. The new image is processed when you save.">
+        <View style={styles.artworkRow}>
+          <View style={styles.coverPreview}>
+            {shownCover ? (
+              <Image source={{ uri: shownCover }} style={styles.coverImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.coverFallback}>No artwork</Text>
+            )}
+          </View>
+          <View style={styles.artworkActions}>
+            <Button
+              label={coverUpload ? 'Choose another image' : 'Replace artwork'}
+              onPress={() => void changeArtwork()}
+              disabled={busy}
+            />
+            {!!coverUpload && (
+              <>
+                <Text style={coverUpload.error ? uiStyles.error : uiStyles.muted}>
+                  {fileSize(coverUpload.size)} • {uploadLabel(coverUpload)}
+                </Text>
+                <Button kind="ghost" label="Keep current artwork" onPress={() => setCoverUpload(null)} />
+              </>
+            )}
+          </View>
+        </View>
+      </Card>
+
+      <Card title="Release details">
         <Field label="Description" value={description} onChangeText={setDescription} multiline />
-        <Field
+
+        <Dropdown
+          label="Music type"
+          items={MUSIC_TYPE_OPTIONS}
+          value={musicTypeChoice}
+          onChange={(choice) => {
+            setMusicTypeChoice(choice);
+            if (choice === 'hymn') setMusicType('Hymns');
+            else if (choice === 'spiritual_song') setMusicType('Spiritual Songs');
+            else if (choice !== 'other') setMusicType('');
+            else if (musicTypeOption(musicType) !== 'other') setMusicType('');
+          }}
+          placeholder="Choose a music type"
+        />
+        {musicTypeChoice === 'other' && (
+          <Field label="Other music type" value={musicType} onChangeText={setMusicType} placeholder="Enter the music type" />
+        )}
+
+        <Dropdown
+          label="Recording type"
+          items={RECORDING_TYPE_OPTIONS}
+          value={recordingTypeChoice}
+          onChange={(choice) => {
+            setRecordingTypeChoice(choice);
+            if (choice === 'studio') setRecordingType('Studio');
+            else if (choice === 'live') setRecordingType('Live');
+            else if (choice === 'instrumental') setRecordingType('Instrumental');
+            else if (choice !== 'other') setRecordingType('');
+            else if (recordingTypeOption(recordingType) !== 'other') setRecordingType('');
+          }}
+          placeholder="Choose a recording type"
+        />
+        {recordingTypeChoice === 'other' && (
+          <Field label="Other recording type" value={recordingType} onChangeText={setRecordingType} placeholder="Enter the recording type" />
+        )}
+
+        <ReleaseDateTimeField
           label="Goes live on CHC"
           value={scheduledAt}
-          onChangeText={setScheduledAt}
-          placeholder="YYYY-MM-DD"
+          onChange={setScheduledAt}
+          minimumDate={minimumReleaseDate}
           hint="Changing this needs at least 48 hours' notice. If you require a release date that is closer than 48 hours, please email x@x.x."
         />
-        <Field
+        <ReleaseDateTimeField
           label="Originally released (optional)"
           value={originalDate}
-          onChangeText={setOriginalDate}
-          placeholder="YYYY-MM-DD"
+          onChange={setOriginalDate}
+          mode="date"
+          optional
           hint="The date listeners see if this came out elsewhere first. Clear it to fall back to the CHC date."
         />
       </Card>
 
       <Card
         title={`Tracks (${tracks.length})`}
-        description="Reorder, rename, re-credit, or add more. Adding a track to an album is how a collection grows."
+        description="Reorder, rename, re-credit, add, or permanently delete tracks."
       >
         {tracks.map((track, index) => (
           <View key={track.key} style={styles.track}>
@@ -352,7 +525,7 @@ export default function EditRelease() {
         ))}
 
         <View style={uiStyles.actions}>
-          <Button label="Add tracks" onPress={() => void addTracks()} />
+          <Button label="Add tracks" onPress={() => void addTracks()} disabled={busy || deletingRelease} />
         </View>
       </Card>
 
@@ -376,6 +549,24 @@ export default function EditRelease() {
 
 const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' },
+  localeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md },
+  localeField: { flex: 1, minWidth: 220 },
+  rtl: { textAlign: 'right', writingDirection: 'rtl' },
+  artworkRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACING.lg },
+  coverPreview: {
+    width: 180,
+    height: 180,
+    borderRadius: RADII.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coverImage: { width: '100%', height: '100%' },
+  coverFallback: { color: COLORS.muted, fontWeight: '800' },
+  artworkActions: { flex: 1, minWidth: 220, gap: SPACING.sm },
   group: { gap: 8 },
   track: { gap: SPACING.sm, paddingBottom: SPACING.md },
   trackBody: { flex: 1, minWidth: 200, gap: 4 },

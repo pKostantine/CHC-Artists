@@ -10,7 +10,7 @@ function getBaseUrl(): string {
  * A public delivery URL for an object the resolver serves. Buckets other than
  * the three public ones have no public route, so they resolve to nothing.
  */
-export function resolveImageUrl(bucket: string, path: string): string | null {
+export function resolveImageUrl(bucket: string, path: string, version?: string | number | null): string | null {
   const segment = bucket === 'chc-images' ? 'images'
     : bucket === 'chc-music' ? 'music'
     : bucket === 'chc-learning' ? 'learning'
@@ -18,7 +18,8 @@ export function resolveImageUrl(bucket: string, path: string): string | null {
   if (!segment) return null;
 
   const encoded = path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  return `${getBaseUrl()}/${segment}/${encoded}`;
+  const cacheBust = version === null || version === undefined || version === '' ? '' : `?v=${encodeURIComponent(String(version))}`;
+  return `${getBaseUrl()}/${segment}/${encoded}${cacheBust}`;
 }
 
 export function resolveTrackAudio(track: LyricEditorTrack): string | null {

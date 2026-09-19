@@ -7,7 +7,7 @@ import { useWorkspace } from '@/context/WorkspaceContext';
 import type { PublicationStatus } from '@/types/creator';
 import { shortDate, submissionTypeLabel } from '@/utils/format';
 
-const IN_REVIEW: PublicationStatus[] = ['pending_review', 'approved', 'processing'];
+const IN_REVIEW: PublicationStatus[] = ['pending_review', 'processing'];
 
 export default function SubmissionsDashboard() {
   const { dashboard, loading, error, refresh, draft } = useWorkspace();
@@ -16,19 +16,24 @@ export default function SubmissionsDashboard() {
   // Pick up reviewer decisions when the creator comes back to this page.
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
-  const needsAction = submissions.filter((s) => s.status === 'changes_requested');
+  // Fully approved/processed music moves to the Releases section. Published
+  // work lives there too. Submissions is only the working/review inbox.
+  const activeSubmissions = submissions.filter((submission) =>
+    submission.status !== 'approved' && submission.status !== 'published',
+  );
+  const needsAction = activeSubmissions.filter((s) => s.status === 'changes_requested');
   const draftInProgress = Boolean(draft.title || draft.media.length || draft.artwork);
   const stats = [
     { label: 'Needs changes', value: needsAction.length },
-    { label: 'In review', value: submissions.filter((s) => IN_REVIEW.includes(s.status)).length },
-    { label: 'Published', value: submissions.filter((s) => s.status === 'published').length },
+    { label: 'In review', value: activeSubmissions.filter((s) => IN_REVIEW.includes(s.status)).length },
+    { label: 'Other submissions', value: activeSubmissions.filter((s) => !IN_REVIEW.includes(s.status) && s.status !== 'changes_requested').length },
   ];
 
   return (
     <Page>
       <PageHeader
         title="Submissions"
-        subtitle="Send Music and Learn & Study work to CHC and follow it from review to publication."
+        subtitle="Create new work and follow it through review. Fully approved music moves to Releases."
         action={<Button kind="primary" label={draftInProgress ? 'Continue draft' : 'New submission'} onPress={() => router.push('/submission/new')} />}
       />
 
@@ -52,10 +57,10 @@ export default function SubmissionsDashboard() {
       </View>
 
       <Card title="Your submissions">
-        {loading && !submissions.length ? (
+        {loading && !activeSubmissions.length ? (
           <Loading label="Loading submissions…" />
-        ) : submissions.length ? (
-          submissions.map((s) => (
+        ) : activeSubmissions.length ? (
+          activeSubmissions.map((s) => (
             <Pressable
               key={s.id}
               accessibilityRole="link"
@@ -78,7 +83,7 @@ export default function SubmissionsDashboard() {
         ) : (
           <View style={styles.empty}>
             <Text style={uiStyles.rowTitle}>No submissions yet</Text>
-            <Text style={uiStyles.muted}>Start a music release, learning album, or lesson set. Your files stay private until CHC publishes them.</Text>
+            <Text style={uiStyles.muted}>No submissions need your attention right now. Approved music appears in Releases.</Text>
           </View>
         )}
       </Card>

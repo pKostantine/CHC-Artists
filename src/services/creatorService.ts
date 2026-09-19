@@ -11,6 +11,7 @@ import type {
   ArtistProfile,
   ArtistSocialLink,
   CreatorRelease,
+  CreatorReleaseSummary,
   CreditOptions,
   SubmissionItem,
   SubmissionItemRole,
@@ -400,6 +401,10 @@ export const creatorService = {
     });
   },
 
+  releases(accountId: string): Promise<CreatorReleaseSummary[]> {
+    return rpc<CreatorReleaseSummary[]>('get_creator_releases', { p_creator_account_id: accountId });
+  },
+
   release(releaseId: string): Promise<CreatorRelease> {
     return rpc<CreatorRelease>('get_creator_release', { p_release_id: releaseId });
   },
@@ -427,13 +432,15 @@ export const creatorService = {
     });
   },
 
-  updateRelease(releaseId: string, patch: {
+  async updateRelease(releaseId: string, patch: {
     title?: string | null;
     description?: string | null;
     scheduledReleaseAt?: string | null;
     originalReleaseDate?: string | null;
     clearOriginalReleaseDate?: boolean;
     localizedTitles?: Record<string, string> | null;
+    musicType?: string | null;
+    recordingType?: string | null;
     tracks?: {
       id?: string;
       uploadIntentId?: string;
@@ -443,17 +450,30 @@ export const creatorService = {
     }[] | null;
     coverUploadIntentId?: string | null;
   }): Promise<CreatorRelease> {
-    return rpc<CreatorRelease>('update_creator_release', {
+    await rpc<CreatorRelease>('update_creator_release', {
       p_release_id: releaseId,
       p_title: patch.title ?? null,
       p_description: patch.description ?? null,
       p_scheduled_release_at: patch.scheduledReleaseAt ? toIsoOrNull(patch.scheduledReleaseAt) : null,
       p_original_release_date: nullIfBlank(patch.originalReleaseDate ?? ''),
       p_clear_original_release_date: Boolean(patch.clearOriginalReleaseDate),
-      p_localized_titles: patch.localizedTitles ?? null,
+      // The dedicated metadata RPC below owns the editable title-language set,
+      // including removing a title that the artist cleared.
+      p_localized_titles: null,
       p_tracks: patch.tracks ?? null,
       p_cover_upload_intent_id: patch.coverUploadIntentId ?? null,
     });
+
+    if (patch.localizedTitles !== undefined || patch.musicType !== undefined || patch.recordingType !== undefined) {
+      await rpc<void>('update_creator_release_metadata', {
+        p_release_id: releaseId,
+        p_music_type: patch.musicType ?? null,
+        p_recording_type: patch.recordingType ?? null,
+        p_localized_titles: patch.localizedTitles ?? null,
+      });
+    }
+
+    return this.release(releaseId);
   },
 
   async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number, role: SubmissionItemRole | null = null): Promise<void> {
