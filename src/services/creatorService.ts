@@ -473,7 +473,7 @@ export const creatorService = {
       });
     }
 
-    return this.release(releaseId);
+    return rpc<CreatorRelease>('get_creator_release', { p_release_id: releaseId });
   },
 
   async attachUpload(submissionId: string, uploadIntentId: string, title: string, order: number, role: SubmissionItemRole | null = null): Promise<void> {
