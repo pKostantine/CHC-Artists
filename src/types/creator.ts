@@ -1,6 +1,7 @@
 export type SubmissionType = 'music_release' | 'learning_album' | 'learning_lesson_set' | 'artist_update' | 'cantor_update';
 export type PublicationStatus = 'draft' | 'uploading' | 'ready_to_submit' | 'pending_review' | 'changes_requested' | 'approved' | 'processing' | 'published' | 'rejected' | 'archived';
 export type ReleaseType = 'single' | 'ep' | 'album';
+export type ReleaseTimingMode = 'asap' | 'scheduled';
 export type MediaKind = 'audio' | 'video' | 'image';
 export type SubmissionMode = 'music' | 'learning_album' | 'learning_lesson_set';
 
@@ -83,6 +84,7 @@ export interface CreatorReleaseSummary {
   publicationStatus: PublicationStatus;
   musicType: string | null;
   recordingType: string | null;
+  releaseTimingMode: ReleaseTimingMode;
   scheduledReleaseAt: string | null;
   originalReleaseDate: string | null;
   displayDate: string | null;
@@ -103,6 +105,7 @@ export interface CreatorRelease {
   publicationStatus: PublicationStatus;
   musicType: string | null;
   recordingType: string | null;
+  releaseTimingMode: ReleaseTimingMode;
   scheduledReleaseAt: string | null;
   originalReleaseDate: string | null;
   displayDate: string | null;
@@ -188,7 +191,9 @@ export interface CreatorDraft {
   localizedTitle: LocalizedMetadata;
   artwork?: UploadCandidate;
   media: UploadCandidate[];
-  /** When this goes live on CHC. Must be at least 48 hours out. */
+  /** Publish immediately after approval, or wait for a selected date/time. */
+  releaseTimingMode: ReleaseTimingMode;
+  /** Used only when releaseTimingMode is scheduled; must be at least 48 hours out. */
   scheduledReleaseAt: string;
   /** When it came out elsewhere, if it did. Wins over the CHC date on display. */
   originalReleaseDate: string;
