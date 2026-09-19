@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { FileDropZone } from '@/components/FileDropZone';
 import { MediaPreview } from '@/components/MediaPreview';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
+import { ReorderableList } from '@/components/ReorderableList';
 import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
 import { Banner, Button, Card, Chips, Dropdown, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
@@ -147,59 +148,20 @@ function LearningContributorPicker({ allowChorus, options, value, onChange }: {
   );
 }
 
-function TrackDragHandle({ onMove }: { onMove: (delta: -1 | 1) => void }) {
-  const lastStep = useRef(0);
-  const [dragging, setDragging] = useState(false);
-
-  const responder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => {
-      lastStep.current = 0;
-      setDragging(true);
-    },
-    onPanResponderMove: (_event, gesture) => {
-      const step = gesture.dy >= 0 ? Math.floor(gesture.dy / 56) : Math.ceil(gesture.dy / 56);
-      while (lastStep.current < step) {
-        onMove(1);
-        lastStep.current += 1;
-      }
-      while (lastStep.current > step) {
-        onMove(-1);
-        lastStep.current -= 1;
-      }
-    },
-    onPanResponderRelease: () => {
-      lastStep.current = 0;
-      setDragging(false);
-    },
-    onPanResponderTerminate: () => {
-      lastStep.current = 0;
-      setDragging(false);
-    },
-  }), [onMove]);
-
-  return (
-    <View {...responder.panHandlers} style={[styles.dragHandle, dragging && styles.dragHandleActive]}>
-      <Text style={styles.dragHandleText}>☰ Drag</Text>
-    </View>
-  );
-}
-
-function FileRow({ file, index, total, previewing, onPreview, onRetry, onRemove, onMove }: {
+function FileRow({ file, index, previewing, onPreview, onRetry, onRemove, dragHandle }: {
   file: UploadCandidate;
   index?: number;
-  total?: number;
   previewing: boolean;
   onPreview: () => void;
   onRetry: () => void;
   onRemove: () => void;
-  onMove?: (delta: -1 | 1) => void;
+  dragHandle?: ReactNode;
 }) {
   const statusStyle = file.error ? uiStyles.error : file.uploaded ? uiStyles.success : uiStyles.muted;
   return (
     <View>
-      <View style={uiStyles.row}>
+      <View style={[uiStyles.row, styles.fileRow]}>
+        {dragHandle}
         <View style={styles.fileText}>
           <Text style={uiStyles.rowTitle} numberOfLines={1}>{index === undefined ? `Artwork: ${file.name}` : `${index + 1}. ${file.name}`}</Text>
           <Text style={statusStyle}>{fileSize(file.size)} • {uploadLabel(file)}</Text>
@@ -209,17 +171,6 @@ function FileRow({ file, index, total, previewing, onPreview, onRetry, onRemove,
           {!!file.error && <Text style={uiStyles.errorDetail}>{file.error}</Text>}
         </View>
         <View style={styles.fileActions}>
-          {onMove && index !== undefined && total !== undefined && (
-            <>
-              <TrackDragHandle onMove={onMove} />
-              <Pressable accessibilityLabel="Move up" disabled={index === 0} onPress={() => onMove(-1)} hitSlop={6}>
-                <Text style={[styles.order, index === 0 && styles.dim]}>↑</Text>
-              </Pressable>
-              <Pressable accessibilityLabel="Move down" disabled={index === total - 1} onPress={() => onMove(1)} hitSlop={6}>
-                <Text style={[styles.order, index === total - 1 && styles.dim]}>↓</Text>
-              </Pressable>
-            </>
-          )}
           {!!file.error && <Pressable onPress={onRetry} hitSlop={6}><Text style={uiStyles.link}>Retry</Text></Pressable>}
           <Pressable onPress={onPreview} hitSlop={6}><Text style={uiStyles.link}>{previewing ? 'Hide' : 'Preview'}</Text></Pressable>
           <Pressable onPress={onRemove} hitSlop={6}><Text style={uiStyles.remove}>Remove</Text></Pressable>
@@ -236,6 +187,7 @@ export default function NewSubmission() {
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [credits, setCredits] = useState<CreditOptions | null>(null);
+  const [draggingTracks, setDraggingTracks] = useState(false);
   const earliestReleaseChoice = useMemo(() => new Date(Date.now() + 48 * 60 * 60 * 1000), []);
 
   useEffect(() => {
@@ -351,14 +303,14 @@ export default function NewSubmission() {
     });
   }
 
-  function move(fileId: string, delta: -1 | 1) {
+  function moveTrack(fromIndex: number, toIndex: number) {
     setDraft((current) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= current.media.length || toIndex >= current.media.length) {
+        return current;
+      }
       const media = [...current.media];
-      const index = media.findIndex((file) => file.id === fileId);
-      if (index < 0) return current;
-      const next = index + delta;
-      if (next < 0 || next >= media.length) return current;
-      [media[index], media[next]] = [media[next], media[index]];
+      const [moved] = media.splice(fromIndex, 1);
+      media.splice(toIndex, 0, moved);
       return { ...current, media };
     });
   }
@@ -389,7 +341,7 @@ export default function NewSubmission() {
   }
 
   return (
-    <Page>
+    <Page scrollEnabled={!draggingTracks}>
       <PageHeader
         title="New submission"
         subtitle={MODE_HELP[draft.mode]}
@@ -565,33 +517,38 @@ export default function NewSubmission() {
           />
         )}
 
-        {draft.media.map((file, index) => (
-          <View key={file.id}>
-            <FileRow
-              file={file}
-              index={index}
-              total={draft.media.length}
-              previewing={previewId === file.id}
-              onPreview={() => setPreviewId(previewId === file.id ? null : file.id)}
-              onRetry={() => uploadDraftFile(file)}
-              onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
-              onMove={(delta) => move(file.id, delta)}
-            />
-            {isMusic && (
-              <TrackMetadataEditor
-                value={file}
+        <ReorderableList
+          items={draft.media}
+          getKey={(file) => file.id}
+          onMove={moveTrack}
+          onDragActiveChange={setDraggingTracks}
+          renderItem={(file, index, dragHandle) => (
+            <View style={styles.trackCard}>
+              <FileRow
+                file={file}
                 index={index}
-                total={draft.media.length}
-                identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
-                onCopyCreditsToAll={() => copyCreditsToAll(file.id)}
-                onChange={(change) => setDraft((current) => ({
-                  ...current,
-                  media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
-                }))}
+                previewing={previewId === file.id}
+                onPreview={() => setPreviewId(previewId === file.id ? null : file.id)}
+                onRetry={() => uploadDraftFile(file)}
+                onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
+                dragHandle={dragHandle}
               />
-            )}
-          </View>
-        ))}
+              {isMusic && (
+                <TrackMetadataEditor
+                  value={file}
+                  index={index}
+                  total={draft.media.length}
+                  identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
+                  onCopyCreditsToAll={() => copyCreditsToAll(file.id)}
+                  onChange={(change) => setDraft((current) => ({
+                    ...current,
+                    media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
+                  }))}
+                />
+              )}
+            </View>
+          )}
+        />
 
         {!files.length && <Text style={uiStyles.muted}>No files yet.</Text>}
       </Card>
@@ -630,12 +587,19 @@ const styles = StyleSheet.create({
   localeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md },
   localeField: { flexGrow: 1, flexBasis: 220 },
   rtl: { textAlign: 'right', writingDirection: 'rtl' },
+  fileRow: { alignItems: 'center' },
   fileText: { flex: 1, minWidth: 200, gap: 3 },
+  trackCard: {
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceSoft,
+  },
   fileActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: COLORS.border, overflow: 'hidden', marginTop: 4 },
   progressFill: { height: 4, backgroundColor: COLORS.gold },
-  order: { color: COLORS.goldBright, fontSize: 20 },
-  dim: { opacity: 0.25 },
   previewTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 24 },
   requirements: { gap: 4, padding: 12, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADII.sm, backgroundColor: COLORS.black },
   requirementsTitle: { color: COLORS.white, fontWeight: '800', fontSize: 13 },
@@ -645,7 +609,4 @@ const styles = StyleSheet.create({
   creditsBody: { gap: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
   trackMetadata: { gap: SPACING.md, marginLeft: SPACING.md, marginBottom: SPACING.md, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSoft },
   contributor: { gap: SPACING.sm, padding: SPACING.md, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
-  dragHandle: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: RADII.sm, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.black },
-  dragHandleActive: { borderColor: COLORS.gold, backgroundColor: COLORS.surfaceSoft },
-  dragHandleText: { color: COLORS.goldBright, fontWeight: '900', fontSize: 12 },
 });
