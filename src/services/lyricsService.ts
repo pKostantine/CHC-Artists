@@ -47,3 +47,15 @@ export async function saveLyricDraft(input: {
   });
   return unwrap<LyricDraft>(data as LyricDraft | null, error);
 }
+
+
+export async function publishLyricLanguages(
+  trackId: string,
+  locales: LocaleCode[],
+): Promise<{ trackId: string; locales: LocaleCode[]; publishedAt: string }> {
+  const { data, error } = await supabase.rpc('publish_track_lyric_languages', {
+    p_track_id: trackId,
+    p_locales: locales,
+  });
+  return unwrap(data as { trackId: string; locales: LocaleCode[]; publishedAt: string } | null, error);
+}
