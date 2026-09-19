@@ -25,6 +25,7 @@ import {
   createLyricLinesFromText,
   findActiveLyricLineIndex,
   formatLrc,
+  parseLrc,
 } from '@/utils/synchronizedLyrics';
 import { MultilingualLyricRow } from './MultilingualLyricRow';
 
@@ -387,7 +388,6 @@ export function LyricsStudio() {
           .map((line) => line.replace(/^\s*\[[^\]]+\]\s*/, ''))
           .join('\n'),
       );
-      const { parseLrc } = await import('@/utils/synchronizedLyrics');
       const timed = parseLrc(contents);
       const imported = timed.length ? timed : parsed;
 
