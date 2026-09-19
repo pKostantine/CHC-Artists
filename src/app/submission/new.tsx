@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { FileDropZone } from '@/components/FileDropZone';
 import { MediaPreview } from '@/components/MediaPreview';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
-import { Banner, Button, Card, Chips, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
+import { Banner, Button, Card, Chips, Dropdown, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
@@ -12,7 +12,7 @@ import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, TrackC
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { droppedUploadCandidates, pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
-import { guessRecordingTypeFromFilename, hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
+import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
 
 const MODES: { id: SubmissionMode; title: string }[] = [
   { id: 'music', title: 'Music release' },
@@ -21,9 +21,33 @@ const MODES: { id: SubmissionMode; title: string }[] = [
 ];
 
 const MODE_HELP: Record<SubmissionMode, string> = {
-  music: 'Add the audio tracks in order, review the guessed English/Arabic/French titles, then add credits. CHC determines Single, EP, or Album automatically.',
-  learning_album: 'Full hymn recordings by a cantor or chorus for Learn & Study. Choose an existing contributor or add one, then review the English/Arabic/French title.',
-  learning_lesson_set: 'Teaching lessons for one hymn by a cantor. Choose an existing cantor or add one, then review the English/Arabic/French title.',
+  music: 'Enter the release title, choose the release details, then add audio. Track titles are guessed from filenames and remain editable. CHC determines Single, EP, or Album automatically.',
+  learning_album: 'Enter the album title first, then choose a cantor or chorus and add the recordings.',
+  learning_lesson_set: 'Enter the lesson set title first, then choose a cantor and add the lessons.',
+};
+
+const MUSIC_TYPE_OPTIONS = [
+  { id: 'hymn', title: 'Hymn' },
+  { id: 'spiritual_song', title: 'Spiritual song' },
+  { id: 'other', title: 'Other' },
+];
+
+const RECORDING_TYPE_OPTIONS = [
+  { id: 'studio', title: 'Studio' },
+  { id: 'live', title: 'Live' },
+  { id: 'instrumental', title: 'Instrumental' },
+  { id: 'other', title: 'Other' },
+];
+
+const MUSIC_TYPE_VALUES: Record<string, string> = {
+  hymn: 'Hymn',
+  spiritual_song: 'Spiritual song',
+};
+
+const RECORDING_TYPE_VALUES: Record<string, string> = {
+  studio: 'Studio',
+  live: 'Live',
+  instrumental: 'Instrumental',
 };
 
 function LearningContributorPicker({ allowChorus, options, value, onChange }: {
@@ -387,8 +411,10 @@ export default function NewSubmission() {
     const titleKind = isMusic ? 'release' : draft.mode === 'learning_album' ? 'album' : 'lesson set';
     problems.push(`Add the ${titleKind} title in at least one language.`);
   }
-  if (isMusic && !draft.musicType.trim()) problems.push('Add a music type.');
-  if (isMusic && !draft.recordingType.trim()) problems.push('Add a recording type.');
+  if (isMusic && !draft.musicTypeOption) problems.push('Choose a music type.');
+  if (isMusic && draft.musicTypeOption === 'other' && !draft.musicType.trim()) problems.push('Enter the other music type.');
+  if (isMusic && !draft.recordingTypeOption) problems.push('Choose a recording type.');
+  if (isMusic && draft.recordingTypeOption === 'other' && !draft.recordingType.trim()) problems.push('Enter the other recording type.');
   if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
   if (draft.mode === 'learning_album' && !draft.cantorId) problems.push('Choose or add a cantor / chorus.');
   if (draft.mode === 'learning_lesson_set' && !draft.cantorId) problems.push('Choose or add a cantor.');
@@ -413,26 +439,11 @@ export default function NewSubmission() {
 
   function addMedia(picked: UploadCandidate[]) {
     if (!picked.length) return;
-    setDraft((current) => {
-      const firstTrack = picked[0];
-      const shouldGuessReleaseTitle = current.media.length === 0
-        && !hasMusicTitle(current.localizedTitle);
-      const localizedTitle = shouldGuessReleaseTitle
-        ? (firstTrack.localizedTitle ?? current.localizedTitle)
-        : current.localizedTitle;
-      const recordingType = current.mode === 'music' && !current.recordingType.trim()
-        ? (guessRecordingTypeFromFilename(firstTrack.name) || current.recordingType)
-        : current.recordingType;
-
-      return {
-        ...current,
-        media: [...current.media, ...picked],
-        releaseType: releaseTypeForTrackCount(current.media.length + picked.length),
-        localizedTitle,
-        title: shouldGuessReleaseTitle ? preferredLocalizedTitle(localizedTitle) : current.title,
-        recordingType,
-      };
-    });
+    setDraft((current) => ({
+      ...current,
+      media: [...current.media, ...picked],
+      releaseType: releaseTypeForTrackCount(current.media.length + picked.length),
+    }));
     picked.forEach(uploadDraftFile);
   }
 
@@ -535,6 +546,29 @@ export default function NewSubmission() {
         <Segmented items={MODES} value={draft.mode} onChange={(mode) => patch({ mode: mode as SubmissionMode })} />
       </Card>
 
+      <Card
+        title={isMusic ? 'Release title' : draft.mode === 'learning_album' ? 'Album title' : 'Lesson set title'}
+        description={isMusic
+          ? 'Enter the title of the release itself. English, Arabic, and French are individually optional, but at least one is required. Track titles are handled separately from the uploaded filenames.'
+          : 'Enter the title of this submission. English, Arabic, and French are individually optional, but at least one is required.'}
+      >
+        <View style={styles.localeGrid}>
+          {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
+            <View key={key} style={styles.localeField}>
+              <Field
+                label={label}
+                value={draft.localizedTitle[key]}
+                onChangeText={(value) => {
+                  const localizedTitle = { ...draft.localizedTitle, [key]: value };
+                  patch({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
+                }}
+                style={key === 'ar' ? styles.rtl : undefined}
+              />
+            </View>
+          ))}
+        </View>
+      </Card>
+
       <Card title="Details">
         <Field
           label="Description"
@@ -546,20 +580,49 @@ export default function NewSubmission() {
         />
         {isMusic ? (
           <>
-            <Field
+            <Dropdown
               label="Music type"
-              value={draft.musicType}
-              onChangeText={(musicType) => patch({ musicType })}
-              placeholder="e.g. Hymn, Spiritual song, Praise"
-              hint="Describe what kind of music this release is."
+              items={MUSIC_TYPE_OPTIONS}
+              value={draft.musicTypeOption}
+              onChange={(value) => {
+                const musicTypeOption = value as CreatorDraft['musicTypeOption'];
+                patch({
+                  musicTypeOption,
+                  musicType: musicTypeOption === 'other' ? '' : (MUSIC_TYPE_VALUES[musicTypeOption] ?? ''),
+                });
+              }}
+              placeholder="Choose a music type"
             />
-            <Field
+            {draft.musicTypeOption === 'other' && (
+              <Field
+                label="Other music type"
+                value={draft.musicType}
+                onChangeText={(musicType) => patch({ musicType })}
+                placeholder="Enter the music type"
+              />
+            )}
+
+            <Dropdown
               label="Recording type"
-              value={draft.recordingType}
-              onChangeText={(recordingType) => patch({ recordingType })}
-              placeholder="e.g. Studio, Live, Instrumental"
-              hint="Describe how this release was recorded or presented."
+              items={RECORDING_TYPE_OPTIONS}
+              value={draft.recordingTypeOption}
+              onChange={(value) => {
+                const recordingTypeOption = value as CreatorDraft['recordingTypeOption'];
+                patch({
+                  recordingTypeOption,
+                  recordingType: recordingTypeOption === 'other' ? '' : (RECORDING_TYPE_VALUES[recordingTypeOption] ?? ''),
+                });
+              }}
+              placeholder="Choose a recording type"
             />
+            {draft.recordingTypeOption === 'other' && (
+              <Field
+                label="Other recording type"
+                value={draft.recordingType}
+                onChangeText={(recordingType) => patch({ recordingType })}
+                placeholder="Enter the recording type"
+              />
+            )}
             <View style={styles.group}>
               <Label>Released as</Label>
               <Text style={styles.identity}>{credits?.identityArtist?.displayName ?? account?.displayName ?? '—'}</Text>
@@ -612,27 +675,6 @@ export default function NewSubmission() {
             )}
           </>
         )}
-      </Card>
-
-      <Card
-        title={isMusic ? 'Release title' : draft.mode === 'learning_album' ? 'Album title' : 'Lesson set title'}
-        description="Enter English, Arabic, or French. Each field is optional, but at least one is required. CHC uses the first media filename as a starting guess when possible."
-      >
-        <View style={styles.localeGrid}>
-          {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
-            <View key={key} style={styles.localeField}>
-              <Field
-                label={label}
-                value={draft.localizedTitle[key]}
-                onChangeText={(value) => {
-                  const localizedTitle = { ...draft.localizedTitle, [key]: value };
-                  patch({ localizedTitle, title: preferredLocalizedTitle(localizedTitle) });
-                }}
-                style={key === 'ar' ? styles.rtl : undefined}
-              />
-            </View>
-          ))}
-        </View>
       </Card>
 
       <Card title="Artwork & media" description="Files upload privately as soon as you choose them. Nothing is sent to CHC review until you press Submit.">

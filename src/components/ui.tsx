@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import type { PublicationStatus } from '@/types/creator';
@@ -76,6 +76,62 @@ export function Chips({ items, value, onChange }: { items: { id: string; title: 
 /** Like Chips, but one option is always selected. */
 export function Segmented({ items, value, onChange }: { items: { id: string; title: string }[]; value: string; onChange: (id: string) => void }) {
   return <Chips items={items} value={value} onChange={(id) => id && onChange(id)} />;
+}
+
+export function Dropdown({ label, items, value, onChange, placeholder = 'Select an option', hint }: {
+  label: string;
+  items: { id: string; title: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder?: string;
+  hint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = items.find((item) => item.id === value);
+
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((current) => !current)}
+        style={({ pressed }) => [styles.dropdownButton, pressed && styles.pressed]}
+      >
+        <Text style={[styles.dropdownText, !selected && styles.dropdownPlaceholder]}>
+          {selected?.title ?? placeholder}
+        </Text>
+        <Text style={styles.dropdownChevron}>{open ? '▲' : '▼'}</Text>
+      </Pressable>
+      {open && (
+        <View style={styles.dropdownMenu}>
+          {items.map((item) => {
+            const active = item.id === value;
+            return (
+              <Pressable
+                key={item.id}
+                accessibilityRole="menuitem"
+                onPress={() => {
+                  onChange(item.id);
+                  setOpen(false);
+                }}
+                style={({ pressed }) => [
+                  styles.dropdownOption,
+                  active && styles.dropdownOptionActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.dropdownOptionText, active && styles.dropdownOptionTextActive]}>
+                  {item.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+      {!!hint && <Text style={styles.hint}>{hint}</Text>}
+    </View>
+  );
 }
 
 type ButtonKind = 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -166,6 +222,33 @@ const styles = StyleSheet.create({
   hint: { color: COLORS.muted, fontSize: 12 },
   input: { color: COLORS.white, backgroundColor: COLORS.black, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADII.sm, paddingHorizontal: 12, paddingVertical: 11, fontSize: 15 },
   multiline: { minHeight: 90, textAlignVertical: 'top' },
+  dropdownButton: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.black,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  dropdownText: { color: COLORS.white, fontSize: 15, flex: 1 },
+  dropdownPlaceholder: { color: COLORS.muted },
+  dropdownChevron: { color: COLORS.goldBright, fontSize: 11, fontWeight: '900' },
+  dropdownMenu: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.black,
+    overflow: 'hidden',
+  },
+  dropdownOption: { paddingHorizontal: 12, paddingVertical: 11, borderTopWidth: 1, borderTopColor: COLORS.border },
+  dropdownOptionActive: { backgroundColor: COLORS.surfaceSoft },
+  dropdownOptionText: { color: COLORS.white, fontSize: 15 },
+  dropdownOptionTextActive: { color: COLORS.goldBright, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: RADII.pill, borderWidth: 1, borderColor: COLORS.border },
   chipActive: { backgroundColor: COLORS.gold, borderColor: COLORS.gold },

@@ -150,9 +150,13 @@ export interface CreatorDraft {
   description: string;
   /** Automatically inferred from media.length; kept in the draft for compatibility with older saved form state. */
   releaseType: ReleaseType;
-  /** Listener-facing category such as Hymn or Spiritual song. */
+  /** Selected dropdown option. "other" exposes the custom text field. */
+  musicTypeOption: '' | 'hymn' | 'spiritual_song' | 'other';
+  /** Listener-facing category persisted to the catalogue. */
   musicType: string;
-  /** Recording presentation such as Studio, Live, or Instrumental. */
+  /** Selected dropdown option. "other" exposes the custom text field. */
+  recordingTypeOption: '' | 'studio' | 'live' | 'instrumental' | 'other';
+  /** Recording presentation persisted to the catalogue. */
   recordingType: string;
   artistId: string;
   cantorId: string;
