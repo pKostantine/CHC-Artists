@@ -4,9 +4,14 @@ import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import type { PublicationStatus } from '@/types/creator';
 import { statusLabel, statusTone, type StatusTone } from '@/utils/format';
 
-export function Page({ children }: { children: ReactNode }) {
+export function Page({ children, scrollEnabled = true }: { children: ReactNode; scrollEnabled?: boolean }) {
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.pageContent} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.pageContent}
+      keyboardShouldPersistTaps="handled"
+      scrollEnabled={scrollEnabled}
+    >
       {children}
     </ScrollView>
   );
