@@ -31,10 +31,7 @@ export interface LyricDraft {
   id: string;
   trackId: string;
   locale: LocaleCode;
-  kind: LyricKind;
-  syncPrecision: LyricSyncPrecision;
-  title: string | null;
-  source: string | null;
+  description: string | null;
   publicationStatus: string;
   lines: EditableLyricLine[];
 }

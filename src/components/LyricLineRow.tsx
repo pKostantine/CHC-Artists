@@ -11,6 +11,7 @@ export function LyricLineRow({
   canMoveDown,
   onChange,
   onMark,
+  onSeek,
   onMoveUp,
   onMoveDown,
   onDelete,
@@ -21,6 +22,7 @@ export function LyricLineRow({
   canMoveDown: boolean;
   onChange: (line: EditableLyricLine) => void;
   onMark: () => void;
+  onSeek: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
@@ -34,6 +36,14 @@ export function LyricLineRow({
   return (
     <View style={[styles.container, active && styles.active]}>
       <Text style={styles.sequence}>{line.sequence}</Text>
+      <Pressable
+        accessibilityRole="button"
+        disabled={line.startMs === null}
+        onPress={onSeek}
+        style={[styles.seek, line.startMs === null && styles.disabledButton]}
+      >
+        <Text style={styles.seekText}>▶</Text>
+      </Pressable>
       <TextInput
         style={styles.timestamp}
         value={timestampText}
@@ -46,8 +56,8 @@ export function LyricLineRow({
           setTimestampText(formatEditorTimestamp(parsed));
         }}
       />
-      <Pressable style={styles.mark} onPress={onMark}>
-        <Text style={styles.markText}>Mark</Text>
+      <Pressable accessibilityRole="button" style={styles.mark} onPress={onMark}>
+        <Text style={styles.markText}>Set time</Text>
       </Pressable>
       <TextInput
         style={styles.lyric}
@@ -84,6 +94,16 @@ const styles = StyleSheet.create({
   },
   active: { borderColor: COLORS.gold, backgroundColor: COLORS.navyDark },
   sequence: { width: 24, textAlign: 'center', color: COLORS.goldBright, fontWeight: '700' },
+  seek: {
+    width: 34,
+    height: 34,
+    borderRadius: RADII.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  seekText: { color: COLORS.goldBright, fontSize: 13, fontWeight: '900' },
   timestamp: {
     width: 96,
     color: COLORS.white,
@@ -108,5 +128,6 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: SPACING.sm },
   action: { color: COLORS.white, fontSize: 20, minWidth: 22, textAlign: 'center' },
   disabled: { opacity: 0.25 },
+  disabledButton: { opacity: 0.3 },
   delete: { color: COLORS.danger },
 });
