@@ -188,9 +188,8 @@ const styles = StyleSheet.create({
     minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'grab',
   },
-  dragHandleDisabled: { cursor: 'default' },
+  dragHandleDisabled: { opacity: 0.45 },
   dotGrid: {
     width: 16,
     flexDirection: 'row',
