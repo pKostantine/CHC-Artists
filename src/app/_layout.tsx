@@ -1,3 +1,4 @@
+import { useFonts as useLocalFonts } from 'expo-font';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Slot, usePathname } from 'expo-router';
@@ -32,6 +33,9 @@ function clearWebAuthCode() {
 
 export default function RootLayout() {
   const pathname = usePathname();
+  const [fontsLoaded] = useLocalFonts({
+    Athanasius: require('../../assets/fonts/Athanasius.ttf'),
+  });
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [authError] = useState(takeWebAuthRedirectError);
@@ -46,6 +50,14 @@ export default function RootLayout() {
     const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => data.subscription.unsubscribe();
   }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.root} />
+      </SafeAreaProvider>
+    );
+  }
 
   let content;
   if (pathname === '/auth/callback') {

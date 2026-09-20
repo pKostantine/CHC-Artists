@@ -15,4 +15,4 @@ export const COLORS = {
 
 export const SPACING = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 } as const;
 export const RADII = { sm: 8, md: 14, lg: 18, pill: 999 } as const;
-export const TYPOGRAPHY = { title: 'Georgia', body: 'System', arabic: 'Arial' } as const;
+export const TYPOGRAPHY = { title: 'Georgia', body: 'System', coptic: 'Athanasius', arabic: 'Arial' } as const;
