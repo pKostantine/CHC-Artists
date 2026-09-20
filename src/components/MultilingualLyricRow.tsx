@@ -87,7 +87,7 @@ export function MultilingualLyricRow({
               {language.published && <Text style={styles.publishedLabel}>Published</Text>}
             </View>
             <TextInput
-              style={[styles.lyric, language.rtl && styles.rtl]}
+              style={[styles.lyric, language.rtl && styles.rtl, language.value === 'cop' && styles.coptic]}
               value={row.texts[language.value] ?? ''}
               editable={!dragging}
               placeholder={`${language.label} lyric…`}
@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   rtl: { fontFamily: TYPOGRAPHY.arabic, textAlign: 'right', writingDirection: 'rtl' },
+  coptic: { fontFamily: TYPOGRAPHY.coptic },
   deleteButton: {
     width: 34,
     alignItems: 'center',
