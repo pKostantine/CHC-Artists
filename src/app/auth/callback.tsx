@@ -21,7 +21,7 @@ export default function AuthCallback() {
       .catch((error) => setState(describeAuthError(error)));
   }, [url]);
 
-  if (state === 'done') return <Redirect href="/submission" />;
+  if (state === 'done') return <Redirect href="/" />;
   if (state !== 'working') return <SignInScreen initialError={state} />;
   return <Loading label="Finishing Google sign-in…" />;
 }

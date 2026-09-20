@@ -12,7 +12,7 @@ interface BottomTabBarProps {
 }
 
 const TABS: { active: Exclude<ArtistTab, null>; href: Href; icon: IconName; label: string }[] = [
-  { active: 'submissions', href: '/submission', icon: 'document-outline', label: 'Submissions' },
+  { active: 'submissions', href: '/', icon: 'document-outline', label: 'Submissions' },
   { active: 'releases', href: '/releases', icon: 'globe-outline', label: 'Releases' },
   { active: 'lyrics', href: '/lyrics', icon: 'lyrics-outline', label: 'Lyrics' },
   { active: 'profile', href: '/profile', icon: 'person-outline', label: 'Profile' },

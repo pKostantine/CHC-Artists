@@ -6,7 +6,7 @@ export default function NotFound() {
     <Page>
       <PageHeader title="Page not found" subtitle="That address is not part of CHC Artists." />
       <Card>
-        <Button kind="primary" label="Go to submissions" onPress={() => router.replace('/submission')} />
+        <Button kind="primary" label="Go to submissions" onPress={() => router.replace('/')} />
       </Card>
     </Page>
   );

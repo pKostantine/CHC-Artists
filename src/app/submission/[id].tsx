@@ -65,7 +65,7 @@ export default function SubmissionDetail() {
     return (
       <Page>
         <PageHeader title="Submission not found" subtitle="It may belong to a different creator workspace." />
-        <Card><Button kind="primary" label="Back to submissions" onPress={() => router.replace('/submission')} /></Card>
+        <Card><Button kind="primary" label="Back to submissions" onPress={() => router.replace('/')} /></Card>
       </Page>
     );
   }
@@ -122,7 +122,7 @@ export default function SubmissionDetail() {
       <PageHeader
         title={submission.title}
         subtitle={`${submissionTypeLabel(submission.submissionType)} • Created ${shortDate(submission.createdAt)}`}
-        action={<Button kind="ghost" label="← All submissions" onPress={() => router.navigate('/submission')} />}
+        action={<Button kind="ghost" label="← All submissions" onPress={() => router.navigate('/')} />}
       />
 
       {!!notice && <Banner tone="success">{notice}</Banner>}

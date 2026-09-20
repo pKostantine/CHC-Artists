@@ -318,7 +318,7 @@ export default function NewSubmission() {
   async function discard() {
     if (!(await confirmAction('Discard this draft?', 'Everything you entered and uploaded for this submission will be cleared.', 'Discard'))) return;
     resetDraft();
-    router.replace('/submission');
+    router.replace('/');
   }
 
   async function submit() {
@@ -345,7 +345,7 @@ export default function NewSubmission() {
       <PageHeader
         title="New submission"
         subtitle={MODE_HELP[draft.mode]}
-        action={<Button kind="ghost" label="← All submissions" onPress={() => router.navigate('/submission')} />}
+        action={<Button kind="ghost" label="← All submissions" onPress={() => router.navigate('/')} />}
       />
 
       <Card title="What are you submitting?">

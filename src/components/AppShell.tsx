@@ -8,7 +8,7 @@ import { useWorkspace } from '@/context/WorkspaceContext';
 import { supabase } from '@/services/supabase';
 
 const SECTIONS: { href: Href; match: string; label: string; description: string; tab: Exclude<ArtistTab, null> }[] = [
-  { href: '/submission', match: '/submission', label: 'Submissions', description: 'Drafts, review & requested changes', tab: 'submissions' },
+  { href: '/', match: '/', label: 'Submissions', description: 'Drafts, review & requested changes', tab: 'submissions' },
   { href: '/releases', match: '/releases', label: 'Releases', description: 'Ready and released music', tab: 'releases' },
   { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', description: 'Synchronized lyrics', tab: 'lyrics' },
   { href: '/profile', match: '/profile', label: 'Artist profile', description: 'Picture, bio & links', tab: 'profile' },
@@ -20,6 +20,7 @@ const BRAND_LOGO = Platform.OS === 'web'
   : require('../../assets/images/CHC_Artists_sm.png');
 
 function isSectionActive(pathname: string, match: string) {
+  if (match === '/') return pathname === '/' || pathname.startsWith('/submission');
   return pathname === match
     || pathname.startsWith(`${match}/`)
     || (match === '/releases' && pathname.startsWith('/release/'));
