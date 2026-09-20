@@ -1,18 +1,17 @@
 import type { ReactNode } from 'react';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router, usePathname, type Href } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import BottomTabBar, { type ArtistTab } from '@/components/BottomTabBar';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { supabase } from '@/services/supabase';
 
-type TabIconName = 'submissions' | 'releases' | 'lyrics' | 'profile';
-
-const SECTIONS: { href: Href; match: string; label: string; mobileLabel: string; description: string; icon: TabIconName }[] = [
-  { href: '/submission', match: '/submission', label: 'Submissions', mobileLabel: 'Submissions', description: 'Drafts, review & requested changes', icon: 'submissions' },
-  { href: '/releases', match: '/releases', label: 'Releases', mobileLabel: 'Releases', description: 'Ready and released music', icon: 'releases' },
-  { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', mobileLabel: 'Lyrics', description: 'Synchronized lyrics', icon: 'lyrics' },
-  { href: '/profile', match: '/profile', label: 'Artist profile', mobileLabel: 'Profile', description: 'Picture, bio & links', icon: 'profile' },
+const SECTIONS: { href: Href; match: string; label: string; description: string; tab: Exclude<ArtistTab, null> }[] = [
+  { href: '/submission', match: '/submission', label: 'Submissions', description: 'Drafts, review & requested changes', tab: 'submissions' },
+  { href: '/releases', match: '/releases', label: 'Releases', description: 'Ready and released music', tab: 'releases' },
+  { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', description: 'Synchronized lyrics', tab: 'lyrics' },
+  { href: '/profile', match: '/profile', label: 'Artist profile', description: 'Picture, bio & links', tab: 'profile' },
 ];
 
 const DESKTOP_NAV_MIN_WIDTH = 1100;
@@ -26,35 +25,6 @@ function isSectionActive(pathname: string, match: string) {
     || (match === '/releases' && pathname.startsWith('/release/'));
 }
 
-function TabIcon({ kind, active }: { kind: TabIconName; active: boolean }) {
-  const tint = active ? COLORS.goldBright : COLORS.muted;
-
-  if (kind === 'releases') {
-    return (
-      <View style={[styles.discIcon, { borderColor: tint }]}>
-        <View style={[styles.discHole, { borderColor: tint }]} />
-      </View>
-    );
-  }
-
-  if (kind === 'profile') {
-    return (
-      <View style={styles.profileIcon}>
-        <View style={[styles.profileHead, { borderColor: tint }]} />
-        <View style={[styles.profileShoulders, { borderColor: tint }]} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.linesIcon, kind === 'submissions' && styles.linesIconBox, { borderColor: tint }]}>
-      <View style={[styles.iconLine, { backgroundColor: tint }]} />
-      <View style={[styles.iconLine, { backgroundColor: tint }]} />
-      <View style={[styles.iconLine, styles.iconLineShort, { backgroundColor: tint }]} />
-    </View>
-  );
-}
-
 export function AppShell({ children }: { children: ReactNode }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -66,6 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const coarsePointer = Platform.OS !== 'web'
     || (typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches);
   const desktopNavigation = width >= DESKTOP_NAV_MIN_WIDTH && !coarsePointer;
+  const activeTab = SECTIONS.find((section) => isSectionActive(pathname, section.match))?.tab ?? null;
 
   const goTo = (href: Href) => {
     // Top-level sections behave like tabs. replace() keeps navigation in the
@@ -140,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <View style={styles.narrowRoot}>
+    <SafeAreaView edges={['left', 'right']} style={styles.narrowRoot}>
       <View style={[styles.mobileHeader, { paddingTop: Math.max(insets.top, SPACING.sm) }]}>
         <View style={styles.mobileHeaderRow}>
           <View style={styles.mobileIdentity}>
@@ -179,36 +150,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <View style={styles.main}>{children}</View>
 
-      <View
-        accessibilityRole="tablist"
-        style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 6) }]}
-      >
-        {SECTIONS.map((section) => {
-          const active = isSectionActive(pathname, section.match);
-          return (
-            <Pressable
-              key={section.match}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              onPress={() => goTo(section.href)}
-              style={({ pressed }) => [
-                styles.bottomNavItem,
-                active && styles.bottomNavItemActive,
-                pressed && styles.pressed,
-              ]}
-            >
-              <TabIcon kind={section.icon} active={active} />
-              <Text
-                numberOfLines={1}
-                style={[styles.bottomNavText, active && styles.bottomNavTextActive]}
-              >
-                {section.mobileLabel}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
+      <BottomTabBar active={activeTab} />
+    </SafeAreaView>
   );
 }
 
@@ -266,41 +209,4 @@ const styles = StyleSheet.create({
   workspaceText: { color: COLORS.muted, fontSize: 12, fontWeight: '700' },
   workspaceTextActive: { color: COLORS.goldBright },
 
-  bottomNav: {
-    flexDirection: 'row',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingTop: 6,
-    backgroundColor: COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  bottomNavItem: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 50,
-    gap: 2,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderTopWidth: 2,
-    borderTopColor: 'transparent',
-    borderRadius: 0,
-  },
-  bottomNavItemActive: {
-    borderTopColor: COLORS.gold,
-    backgroundColor: 'transparent',
-  },
-  bottomNavText: { color: COLORS.muted, fontSize: 10, fontWeight: '700' },
-  bottomNavTextActive: { color: COLORS.goldBright },
-
-  linesIcon: { width: 22, height: 22, justifyContent: 'center', gap: 3, paddingHorizontal: 2 },
-  linesIconBox: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 4 },
-  iconLine: { height: 1.7, width: '100%', borderRadius: 2 },
-  iconLineShort: { width: '68%' },
-  discIcon: { width: 21, height: 21, borderWidth: 1.7, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  discHole: { width: 6, height: 6, borderWidth: 1.5, borderRadius: 3 },
-  profileIcon: { width: 22, height: 22, alignItems: 'center', justifyContent: 'flex-end' },
-  profileHead: { width: 8, height: 8, borderWidth: 1.5, borderRadius: 4, marginBottom: 2 },
-  profileShoulders: { width: 18, height: 8, borderWidth: 1.5, borderBottomWidth: 0, borderTopLeftRadius: 9, borderTopRightRadius: 9 },
 });
