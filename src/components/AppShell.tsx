@@ -6,11 +6,13 @@ import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { supabase } from '@/services/supabase';
 
-const SECTIONS: { href: Href; match: string; label: string; mobileLabel: string; description: string }[] = [
-  { href: '/submission', match: '/submission', label: 'Submissions', mobileLabel: 'Submissions', description: 'Drafts, review & requested changes' },
-  { href: '/releases', match: '/releases', label: 'Releases', mobileLabel: 'Releases', description: 'Ready and released music' },
-  { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', mobileLabel: 'Lyrics', description: 'Synchronized lyrics' },
-  { href: '/profile', match: '/profile', label: 'Artist profile', mobileLabel: 'Profile', description: 'Picture, bio & links' },
+type TabIconName = 'submissions' | 'releases' | 'lyrics' | 'profile';
+
+const SECTIONS: { href: Href; match: string; label: string; mobileLabel: string; description: string; icon: TabIconName }[] = [
+  { href: '/submission', match: '/submission', label: 'Submissions', mobileLabel: 'Submissions', description: 'Drafts, review & requested changes', icon: 'submissions' },
+  { href: '/releases', match: '/releases', label: 'Releases', mobileLabel: 'Releases', description: 'Ready and released music', icon: 'releases' },
+  { href: '/lyrics', match: '/lyrics', label: 'Lyrics Studio', mobileLabel: 'Lyrics', description: 'Synchronized lyrics', icon: 'lyrics' },
+  { href: '/profile', match: '/profile', label: 'Artist profile', mobileLabel: 'Profile', description: 'Picture, bio & links', icon: 'profile' },
 ];
 
 const DESKTOP_NAV_MIN_WIDTH = 1100;
@@ -22,6 +24,35 @@ function isSectionActive(pathname: string, match: string) {
   return pathname === match
     || pathname.startsWith(`${match}/`)
     || (match === '/releases' && pathname.startsWith('/release/'));
+}
+
+function TabIcon({ kind, active }: { kind: TabIconName; active: boolean }) {
+  const tint = active ? COLORS.goldBright : COLORS.muted;
+
+  if (kind === 'releases') {
+    return (
+      <View style={[styles.discIcon, { borderColor: tint }]}>
+        <View style={[styles.discHole, { borderColor: tint }]} />
+      </View>
+    );
+  }
+
+  if (kind === 'profile') {
+    return (
+      <View style={styles.profileIcon}>
+        <View style={[styles.profileHead, { borderColor: tint }]} />
+        <View style={[styles.profileShoulders, { borderColor: tint }]} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.linesIcon, kind === 'submissions' && styles.linesIconBox, { borderColor: tint }]}>
+      <View style={[styles.iconLine, { backgroundColor: tint }]} />
+      <View style={[styles.iconLine, { backgroundColor: tint }]} />
+      <View style={[styles.iconLine, styles.iconLineShort, { backgroundColor: tint }]} />
+    </View>
+  );
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -166,6 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 pressed && styles.pressed,
               ]}
             >
+              <TabIcon kind={section.icon} active={active} />
               <Text
                 numberOfLines={1}
                 style={[styles.bottomNavText, active && styles.bottomNavTextActive]}
@@ -246,7 +278,8 @@ const styles = StyleSheet.create({
   bottomNavItem: {
     flex: 1,
     minWidth: 0,
-    minHeight: 48,
+    minHeight: 54,
+    gap: 3,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
@@ -260,4 +293,14 @@ const styles = StyleSheet.create({
   },
   bottomNavText: { color: COLORS.muted, fontSize: 11, fontWeight: '800' },
   bottomNavTextActive: { color: COLORS.goldBright },
+
+  linesIcon: { width: 22, height: 22, justifyContent: 'center', gap: 3, paddingHorizontal: 2 },
+  linesIconBox: { borderWidth: 1.5, borderRadius: 4, paddingHorizontal: 4 },
+  iconLine: { height: 1.7, width: '100%', borderRadius: 2 },
+  iconLineShort: { width: '68%' },
+  discIcon: { width: 21, height: 21, borderWidth: 1.7, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  discHole: { width: 6, height: 6, borderWidth: 1.5, borderRadius: 3 },
+  profileIcon: { width: 22, height: 22, alignItems: 'center', justifyContent: 'flex-end' },
+  profileHead: { width: 8, height: 8, borderWidth: 1.5, borderRadius: 4, marginBottom: 2 },
+  profileShoulders: { width: 18, height: 8, borderWidth: 1.5, borderBottomWidth: 0, borderTopLeftRadius: 9, borderTopRightRadius: 9 },
 });
