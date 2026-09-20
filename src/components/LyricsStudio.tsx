@@ -725,7 +725,7 @@ export function LyricsStudio() {
           <View style={styles.sectionCopy}>
             <Text style={styles.sectionTitle}>3. Add the lyrics</Text>
             <Text style={styles.muted}>
-              Paste one line per line in each language. The boxes stay side by side so matching translations line up before you sync them.
+              Paste one row per shared lyric moment. A language can be blank on any row — for example, an English/Arabic track can alternate languages while keeping one shared timeline.
             </Text>
           </View>
 
@@ -797,7 +797,7 @@ export function LyricsStudio() {
             <View style={styles.sectionCopy}>
               <Text style={styles.sectionTitle}>4. Sync the lines</Text>
               <Text style={styles.muted}>
-                Every block is one meaning across all selected languages. Edit any language directly here, add lines whenever you need them, and drag the six-dot handle to put blocks in the exact order you want.
+                Every block is one shared timestamp across the languages. Any language may be blank on any block. Edit text directly here, add lines whenever you need them, and drag the six-dot handle to put blocks in the exact order you want.
               </Text>
             </View>
           </View>
