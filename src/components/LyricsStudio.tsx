@@ -758,7 +758,7 @@ export function LyricsStudio() {
                   </View>
 
                   <TextInput
-                    style={[styles.pasteBox, language?.rtl && styles.arabic]}
+                    style={[styles.pasteBox, language?.rtl && styles.arabic, locale === 'cop' && styles.coptic]}
                     placeholder={`Paste ${language?.label ?? locale} lyrics here…`}
                     placeholderTextColor={COLORS.muted}
                     value={pasteTexts[locale] ?? ''}
@@ -767,7 +767,7 @@ export function LyricsStudio() {
                   />
 
                   <TextInput
-                    style={[styles.description, language?.rtl && styles.arabic]}
+                    style={[styles.description, language?.rtl && styles.arabic, locale === 'cop' && styles.coptic]}
                     placeholder="Optional description"
                     placeholderTextColor={COLORS.muted}
                     value={descriptions[locale] ?? ''}
@@ -990,6 +990,7 @@ export function LyricsStudio() {
                             styles.previewLine,
                             index === activeIndex && styles.previewActive,
                             language?.rtl && styles.arabic,
+                            locale === 'cop' && styles.coptic,
                           ]}
                         >
                           {row.texts[locale] || '—'}
@@ -1130,6 +1131,7 @@ const styles = StyleSheet.create({
   },
   readOnly: { opacity: 0.65, backgroundColor: COLORS.navyDark },
   arabic: { fontFamily: TYPOGRAPHY.arabic, textAlign: 'right', writingDirection: 'rtl' },
+  coptic: { fontFamily: TYPOGRAPHY.coptic },
 
   rowBetween: {
     flexDirection: 'row',
