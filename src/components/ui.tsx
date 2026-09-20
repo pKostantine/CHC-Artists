@@ -1,14 +1,16 @@
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import type { PublicationStatus } from '@/types/creator';
 import { statusLabel, statusTone, type StatusTone } from '@/utils/format';
 
 export function Page({ children, scrollEnabled = true }: { children: ReactNode; scrollEnabled?: boolean }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 700;
   return (
     <ScrollView
       style={styles.page}
-      contentContainerStyle={styles.pageContent}
+      contentContainerStyle={[styles.pageContent, compact && styles.pageContentCompact]}
       keyboardShouldPersistTaps="handled"
       scrollEnabled={scrollEnabled}
     >
@@ -18,13 +20,15 @@ export function Page({ children, scrollEnabled = true }: { children: ReactNode; 
 }
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 700;
   return (
-    <View style={styles.pageHeader}>
-      <View style={styles.pageHeaderText}>
-        <Text style={styles.hero}>{title}</Text>
+    <View style={[styles.pageHeader, compact && styles.pageHeaderCompact]}>
+      <View style={[styles.pageHeaderText, compact && styles.pageHeaderTextCompact]}>
+        <Text style={[styles.hero, compact && styles.heroCompact]}>{title}</Text>
         {!!subtitle && <Text style={styles.subhero}>{subtitle}</Text>}
       </View>
-      {action}
+      {!!action && <View style={compact ? styles.headerActionCompact : undefined}>{action}</View>}
     </View>
   );
 }
@@ -214,12 +218,17 @@ export const uiStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.black },
-  pageContent: { padding: SPACING.lg, gap: SPACING.lg, maxWidth: 1100, width: '100%', alignSelf: 'center', paddingBottom: 80 },
+  pageContent: { padding: SPACING.lg, gap: SPACING.lg, maxWidth: 1100, width: '100%', alignSelf: 'center', paddingBottom: SPACING.xl },
+  pageContentCompact: { paddingHorizontal: SPACING.md, paddingTop: SPACING.md, paddingBottom: SPACING.xl, gap: SPACING.md },
   pageHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: SPACING.md },
+  pageHeaderCompact: { flexDirection: 'column', flexWrap: 'nowrap', alignItems: 'stretch', gap: SPACING.md },
   pageHeaderText: { flexShrink: 1, minWidth: 240, gap: 6 },
+  pageHeaderTextCompact: { minWidth: 0, width: '100%' },
+  headerActionCompact: { width: '100%', alignItems: 'stretch' },
   hero: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 34, lineHeight: 42 },
+  heroCompact: { fontSize: 30, lineHeight: 36 },
   subhero: { color: COLORS.muted, fontSize: 15, lineHeight: 22 },
-  card: { padding: SPACING.lg, gap: SPACING.md, borderRadius: RADII.lg, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  card: { padding: 20, gap: SPACING.md, borderRadius: RADII.lg, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
   cardTitle: { color: COLORS.white, fontSize: 18, fontWeight: '900' },
   muted: { color: COLORS.muted, fontSize: 13, lineHeight: 19 },
   field: { gap: 6 },
@@ -259,7 +268,7 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.gold, borderColor: COLORS.gold },
   chipText: { color: COLORS.white, fontWeight: '700' },
   chipTextActive: { color: COLORS.black },
-  button: { flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 11, borderRadius: RADII.sm, borderWidth: 1 },
+  button: { minHeight: 44, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 11, borderRadius: RADII.sm, borderWidth: 1 },
   buttonText: { fontWeight: '800' },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.8 },
