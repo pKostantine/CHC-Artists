@@ -34,7 +34,7 @@ function clearWebAuthCode() {
 export default function RootLayout() {
   const pathname = usePathname();
   const [fontsLoaded] = useLocalFonts({
-    Athanasius: require('../../assets/fonts/Athanasius.ttf'),
+    Athanasius: require('../../assets/fonts/CopticCHC-Athanasius-V1.0.ttf'),
   });
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
