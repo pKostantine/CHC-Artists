@@ -18,7 +18,7 @@ export default function Root({ children }: { children: ReactNode }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="CHC Artists" />
         <link rel="manifest" href="/manifest.webmanifest" />
-        <style dangerouslySetInnerHTML={{ __html: 'html,body,#root{height:100%;background:#0A0C0E}body{margin:0;overscroll-behavior:none}' }} />
+        <style dangerouslySetInnerHTML={{ __html: 'html,body,#root{height:100%;max-height:100%;background:#0A0C0E}body{margin:0;overflow:hidden;overscroll-behavior:none}' }} />
       </head>
       <body>{children}</body>
     </html>

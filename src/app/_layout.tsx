@@ -1,7 +1,7 @@
 import { useFonts as useLocalFonts } from 'expo-font';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Slot, usePathname } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
@@ -12,6 +12,18 @@ import { COLORS } from '@/constants/theme';
 import { WorkspaceProvider } from '@/context/WorkspaceContext';
 import { describeAuthError } from '@/services/authService';
 import { supabase } from '@/services/supabase';
+
+function AppStack() {
+  return (
+    <Stack
+      screenOptions={{
+        animation: 'none',
+        contentStyle: { backgroundColor: COLORS.black },
+        headerShown: false,
+      }}
+    />
+  );
+}
 
 /** Reads an OAuth error the provider put in the URL on web, then removes the auth params. */
 function takeWebAuthRedirectError(): string {
@@ -62,7 +74,7 @@ export default function RootLayout() {
   let content;
   if (pathname === '/auth/callback') {
     // Native OAuth deep link: that route finishes the exchange itself.
-    content = <Slot />;
+    content = <AppStack />;
   } else if (!ready) {
     content = <Loading label="Opening CHC Artists…" />;
   } else if (!session) {
@@ -72,7 +84,7 @@ export default function RootLayout() {
     content = (
       <WorkspaceProvider key={session.user.id}>
         <AppShell>
-          <Slot />
+          <AppStack />
         </AppShell>
       </WorkspaceProvider>
     );
@@ -87,5 +99,5 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.black },
+  root: { flex: 1, overflow: 'hidden', backgroundColor: COLORS.black },
 });

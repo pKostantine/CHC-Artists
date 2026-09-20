@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#003566" />
+    <meta name="theme-color" content="#0A0C0E" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="CHC Artists" />
@@ -17,15 +17,18 @@
       body,
       #root {
         height: 100%;
-        background-color: #003566;
+        background-color: #0A0C0E;
       }
       body {
         margin: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
       }
       #root {
         display: flex;
         flex: 1;
       }
+      /* Follow Safari's visible viewport as its toolbars expand or collapse. */
       @supports (height: 100dvh) {
         body {
           height: 100dvh;
