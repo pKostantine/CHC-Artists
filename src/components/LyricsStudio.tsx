@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Banner, Loading, PageHeader } from '@/components/ui';
@@ -115,6 +116,8 @@ function editableLinesForLocale(
 }
 
 export function LyricsStudio() {
+  const { width } = useWindowDimensions();
+  const compact = width < 700;
   const [tracks, setTracks] = useState<LyricEditorTrack[]>([]);
   const [trackId, setTrackId] = useState<string | null>(null);
   const [selectedLocales, setSelectedLocales] = useState<LocaleCode[]>(['en']);
@@ -645,7 +648,7 @@ export function LyricsStudio() {
 
   if (!tracks.length) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
         <PageHeader title="Lyrics Studio" subtitle="Add several lyric languages and synchronize them together on one timeline." />
         {message?.tone === 'error' ? (
           <Banner tone="error">{message.text}</Banner>
@@ -661,7 +664,7 @@ export function LyricsStudio() {
   return (
     <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, compact && styles.contentCompact]}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={!dragging}
       >
@@ -670,13 +673,13 @@ export function LyricsStudio() {
           subtitle="Choose a track and all of its lyric languages together. Every selected language shares the same line order and timestamps."
         />
 
-        <View style={styles.panel}>
+        <View style={[styles.panel, compact && styles.panelCompact]}>
           <Text style={styles.sectionTitle}>1. Choose a track</Text>
-          <View style={styles.trackList}>
+          <View style={[styles.trackList, compact && styles.trackListCompact]}>
             {tracks.map((track) => (
               <Pressable
                 key={track.id}
-                style={[styles.trackCard, track.id === trackId && styles.trackCardSelected]}
+                style={[styles.trackCard, compact && styles.trackCardCompact, track.id === trackId && styles.trackCardSelected]}
                 onPress={() => void switchTrack(track.id)}
               >
                 <Text style={styles.trackTitle}>{track.title}</Text>
@@ -689,7 +692,7 @@ export function LyricsStudio() {
           </View>
         </View>
 
-        <View style={styles.panel}>
+        <View style={[styles.panel, compact && styles.panelCompact]}>
           <Text style={styles.sectionTitle}>2. Choose your languages</Text>
           <Text style={styles.muted}>
             Pick every language that belongs to these lyrics. They are edited side by side and synchronized as one lyric timeline, not as separate timing packs.
@@ -721,7 +724,7 @@ export function LyricsStudio() {
           </View>
         </View>
 
-        <View style={styles.panel}>
+        <View style={[styles.panel, compact && styles.panelCompact]}>
           <View style={styles.sectionCopy}>
             <Text style={styles.sectionTitle}>3. Add the lyrics</Text>
             <Text style={styles.muted}>
@@ -792,7 +795,7 @@ export function LyricsStudio() {
           </Pressable>
         </View>
 
-        <View style={styles.syncPanel}>
+        <View style={[styles.syncPanel, compact && styles.panelCompact]}>
           <View style={styles.rowBetween}>
             <View style={styles.sectionCopy}>
               <Text style={styles.sectionTitle}>4. Sync the lines</Text>
@@ -970,7 +973,7 @@ export function LyricsStudio() {
         </View>
 
         {!!rows.length && (
-          <View style={styles.previewPanel}>
+          <View style={[styles.previewPanel, compact && styles.panelCompact]}>
             <Text style={styles.sectionTitle}>Live multilingual preview</Text>
             <Text style={styles.muted}>All chosen languages advance together on the same timestamp.</Text>
             <View style={styles.preview}>
@@ -1018,6 +1021,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     paddingBottom: 80,
   },
+  contentCompact: { paddingHorizontal: 16, paddingTop: 18, gap: 22, paddingBottom: 40 },
   panel: {
     gap: SPACING.md,
     padding: SPACING.lg,
@@ -1026,6 +1030,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  panelCompact: { padding: 0, paddingTop: 16, borderRadius: 0, backgroundColor: 'transparent', borderWidth: 0, borderTopWidth: 1, borderTopColor: COLORS.border },
   syncPanel: {
     gap: SPACING.lg,
     padding: SPACING.lg,
@@ -1042,10 +1047,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  sectionTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 20, fontWeight: '700' },
+  sectionTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 17, lineHeight: 22, fontWeight: '800' },
   sectionCopy: { flex: 1, minWidth: 240, gap: 4 },
   muted: { color: COLORS.muted, fontSize: 13, lineHeight: 19 },
   trackList: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  trackListCompact: { gap: 0 },
   trackCard: {
     minWidth: 220,
     flexGrow: 1,
@@ -1056,6 +1062,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.black,
   },
   trackCardSelected: { borderColor: COLORS.gold, backgroundColor: COLORS.navy },
+  trackCardCompact: { minWidth: '100%', paddingHorizontal: 0, paddingVertical: 12, borderRadius: 0, borderWidth: 0, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: 'transparent' },
   trackTitle: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
 
   languageChips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },

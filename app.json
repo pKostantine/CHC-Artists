@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#022952",
+        "backgroundColor": "#11161B",
         "foregroundImage": "./assets/images/CHC_Artists_App.png"
       }
     },
@@ -28,7 +28,7 @@
       "favicon": "./assets/images/CHC_Artists_sm_web.png"
     },
     "splash": {
-      "backgroundColor": "#003566",
+      "backgroundColor": "#0A0C0E",
       "image": "./assets/images/CHC_Artists_App.png",
       "resizeMode": "contain"
     },

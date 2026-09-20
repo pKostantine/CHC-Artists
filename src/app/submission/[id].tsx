@@ -72,6 +72,11 @@ export default function SubmissionDetail() {
 
   const revising = submission.status === 'changes_requested';
   const blocking = added.length ? uploadsBlocking(added) : 'Add at least one corrected file.';
+  const uploadMode = submission.submissionType === 'music_release'
+    ? 'music'
+    : submission.submissionType === 'learning_album'
+      ? 'learning_album'
+      : 'learning_lesson_set';
 
   async function pick() {
     if (!account || !submission) return;
@@ -79,7 +84,7 @@ export default function SubmissionDetail() {
     const picked = await pickUploadCandidates(submission.submissionType === 'learning_lesson_set' ? 'lesson' : 'audio', true);
     if (!picked.length) return;
     setAdded((current) => [...current, ...picked]);
-    picked.forEach((file) => void runUpload(account.id, file, patchAdded));
+    picked.forEach((file) => void runUpload(account.id, file, uploadMode, patchAdded));
   }
 
   async function resubmit() {
@@ -199,7 +204,7 @@ export default function SubmissionDetail() {
                 </View>
                 <View style={styles.fileActions}>
                   {!!file.error && account && (
-                    <Pressable onPress={() => void runUpload(account.id, file, patchAdded)}><Text style={uiStyles.link}>Retry</Text></Pressable>
+                    <Pressable onPress={() => void runUpload(account.id, file, uploadMode, patchAdded)}><Text style={uiStyles.link}>Retry</Text></Pressable>
                   )}
                   <Pressable onPress={() => setPreviewId(previewId === file.id ? null : file.id)}>
                     <Text style={uiStyles.link}>{previewId === file.id ? 'Hide' : 'Preview'}</Text>

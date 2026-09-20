@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       hitSlop={10}
       style={({ pressed }) => pressed && styles.pressed}
     >
-      <Text style={styles.signOut}>Sign out</Text>
+      <Text style={styles.signOut}>Log out</Text>
     </Pressable>
   );
 
@@ -216,19 +216,19 @@ const styles = StyleSheet.create({
   wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: COLORS.black },
   narrowRoot: { flex: 1, backgroundColor: COLORS.black },
   sidebar: {
-    width: 240,
+    width: 252,
     padding: SPACING.lg,
     gap: SPACING.md,
-    backgroundColor: '#0b0c0e',
+    backgroundColor: COLORS.surface,
     borderRightWidth: 1,
     borderRightColor: COLORS.border,
   },
-  brandBlock: { alignItems: 'flex-start', gap: 8 },
-  brandLogoWide: { width: 112, height: 112 },
-  brandLogoSmall: { width: 42, height: 42 },
-  brand: { color: COLORS.gold, fontWeight: '900', letterSpacing: 2, fontSize: 12 },
-  account: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 20, lineHeight: 26 },
-  accountSmall: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 16, lineHeight: 20 },
+  brandBlock: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandLogoWide: { width: 40, height: 40 },
+  brandLogoSmall: { width: 34, height: 34 },
+  brand: { color: COLORS.goldBright, fontWeight: '900', letterSpacing: 0, fontSize: 12 },
+  account: { color: COLORS.white, fontFamily: TYPOGRAPHY.title, fontSize: 18, lineHeight: 23, fontWeight: '700' },
+  accountSmall: { color: COLORS.muted, fontFamily: TYPOGRAPHY.title, fontSize: 12, lineHeight: 16, fontWeight: '600' },
   navList: { gap: 6, marginTop: SPACING.sm },
   sideNav: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: RADII.sm, gap: 2 },
   navActive: { backgroundColor: COLORS.surfaceSoft },
@@ -237,18 +237,18 @@ const styles = StyleSheet.create({
   navDescription: { color: COLORS.muted, fontSize: 12 },
   pressed: { opacity: 0.72 },
   spacer: { flex: 1 },
-  signOut: { color: COLORS.muted, fontWeight: '700', fontSize: 13 },
+  signOut: { color: COLORS.muted, fontWeight: '700', fontSize: 12 },
   main: { flex: 1, minWidth: 0, minHeight: 0 },
 
   mobileHeader: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.sm,
-    gap: SPACING.sm,
-    backgroundColor: '#0b0c0e',
+    paddingHorizontal: 16,
+    paddingBottom: 7,
+    gap: 6,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  mobileHeaderRow: { minHeight: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.md },
+  mobileHeaderRow: { minHeight: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   mobileIdentity: { minWidth: 0, flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   mobileTitleBlock: { flex: 1, minWidth: 0, gap: 1 },
 
@@ -271,27 +271,27 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 6,
     paddingTop: 6,
-    backgroundColor: '#0b0c0e',
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
   bottomNavItem: {
     flex: 1,
     minWidth: 0,
-    minHeight: 54,
-    gap: 3,
+    minHeight: 50,
+    gap: 2,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderTopWidth: 2,
     borderTopColor: 'transparent',
-    borderRadius: RADII.sm,
+    borderRadius: 0,
   },
   bottomNavItemActive: {
     borderTopColor: COLORS.gold,
-    backgroundColor: COLORS.surfaceSoft,
+    backgroundColor: 'transparent',
   },
-  bottomNavText: { color: COLORS.muted, fontSize: 11, fontWeight: '800' },
+  bottomNavText: { color: COLORS.muted, fontSize: 10, fontWeight: '700' },
   bottomNavTextActive: { color: COLORS.goldBright },
 
   linesIcon: { width: 22, height: 22, justifyContent: 'center', gap: 3, paddingHorizontal: 2 },
