@@ -1,0 +1,11 @@
+{
+  "name": "CHC Artists",
+  "short_name": "CHC Artists",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#0b0c0e",
+  "orientation": "any"
+}
