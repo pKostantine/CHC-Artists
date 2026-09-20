@@ -13,11 +13,17 @@ export function renumberLyricLines<T extends EditableLyricLine>(lines: T[]): T[]
 }
 
 export function createLyricLinesFromText(text: string): EditableLyricLine[] {
+  // Blank rows are meaningful in multilingual lyrics. A mixed-language track
+  // may intentionally have Arabic text on a row and no English/Coptic/French
+  // text for that same shared timestamp, so never collapse empty lines here.
   return text
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => ({ sequence: index + 1, startMs: null, endMs: null, text: line }));
+    .map((line, index) => ({
+      sequence: index + 1,
+      startMs: null,
+      endMs: null,
+      text: line.trim(),
+    }));
 }
 
 export function parseLrcTimestamp(timestamp: string): number | null {
@@ -57,8 +63,8 @@ export function parseLrc(lrc: string): EditableLyricLine[] {
     const timestamps = [...rawLine.matchAll(TIMESTAMP_RE)];
     if (!timestamps.length) return;
     const text = rawLine.replace(TIMESTAMP_RE, '').trim();
-    if (!text) return;
 
+    // A timed blank line is valid and preserves the shared multilingual row.
     timestamps.forEach((timestamp) => {
       const startMs = parseLrcTimestamp(timestamp[0]);
       if (startMs !== null) parsed.push({ sequence: 0, sourceIndex, startMs, endMs: null, text });
