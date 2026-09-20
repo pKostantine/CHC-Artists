@@ -1,6 +1,7 @@
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,7 @@ import {
 import { Banner, Loading, PageHeader } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { resolveTrackAudio } from '@/services/mediaService';
-import { listEditableTracks, loadLyricDraft, publishLyricLanguages, saveLyricDraft } from '@/services/lyricsService';
+import { listEditableTracks, loadLyricDraft, publishLyricLanguages, saveLyricStudioDraft } from '@/services/lyricsService';
 import type {
   EditableLyricLine,
   EditableMultilingualLyricRow,
@@ -31,10 +32,10 @@ import { MultilingualLyricRow } from './MultilingualLyricRow';
 import { ReorderableList } from './ReorderableList';
 
 const LOCALES: Array<{ value: LocaleCode; label: string; rtl?: boolean }> = [
-  { value: 'cop', label: 'Coptic' },
-  { value: 'ar', label: 'Arabic', rtl: true },
   { value: 'en', label: 'English' },
   { value: 'fr', label: 'French' },
+  { value: 'cop', label: 'Coptic' },
+  { value: 'ar', label: 'Arabic', rtl: true },
 ];
 
 type LanguageState = 'none' | 'draft' | 'published' | 'published_draft';
@@ -116,7 +117,7 @@ function editableLinesForLocale(
 export function LyricsStudio() {
   const [tracks, setTracks] = useState<LyricEditorTrack[]>([]);
   const [trackId, setTrackId] = useState<string | null>(null);
-  const [selectedLocales, setSelectedLocales] = useState<LocaleCode[]>(['cop']);
+  const [selectedLocales, setSelectedLocales] = useState<LocaleCode[]>(['en']);
   const [rows, setRows] = useState<EditableMultilingualLyricRow[]>([]);
   const [descriptions, setDescriptions] = useState<Record<string, string>>({});
   const [pasteTexts, setPasteTexts] = useState<Record<string, string>>({});
@@ -129,13 +130,14 @@ export function LyricsStudio() {
   const [timelineWidth, setTimelineWidth] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dirtyRevision = useRef(0);
+  const knownLocales = useRef<Set<LocaleCode>>(new Set());
   const draftSnapshot = useRef<{
     trackId: string | null;
-    selectedLocales: LocaleCode[];
+    locales: LocaleCode[];
     rows: EditableMultilingualLyricRow[];
     descriptions: Record<string, string>;
     dirty: boolean;
-  }>({ trackId: null, selectedLocales: [], rows: [], descriptions: {}, dirty: false });
+  }>({ trackId: null, locales: [], rows: [], descriptions: {}, dirty: false });
 
   const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
   const audioUrl = selectedTrack ? resolveTrackAudio(selectedTrack) : null;
@@ -210,13 +212,14 @@ export function LyricsStudio() {
           if (draft) existingLocales.push(locale);
         });
 
+        knownLocales.current = new Set(existingLocales);
         setLanguageStates(states);
         setDescriptions(nextDescriptions);
         setPasteTexts({});
         setRows(draftRows(drafts));
         setSelectedLocales((current) => {
           if (existingLocales.length) return localeOrder(existingLocales);
-          return current.length ? localeOrder(current) : ['cop'];
+          return current.length ? localeOrder(current) : ['en'];
         });
         setDirty(false);
       })
@@ -228,39 +231,68 @@ export function LyricsStudio() {
     return () => { cancelled = true; };
   }, [trackId]);
 
+  function currentDraftLocales(): LocaleCode[] {
+    const locales = new Set<LocaleCode>([
+      ...knownLocales.current,
+      ...selectedLocales,
+      ...LOCALES
+        .map((item) => item.value)
+        .filter((locale) => (languageStates[locale] ?? 'none') !== 'none'),
+    ]);
+    return localeOrder([...locales]);
+  }
+
   useEffect(() => {
     draftSnapshot.current = {
       trackId,
-      selectedLocales,
+      locales: currentDraftLocales(),
       rows,
       descriptions,
       dirty,
     };
-  }, [descriptions, dirty, rows, selectedLocales, trackId]);
+  }, [descriptions, dirty, languageStates, rows, selectedLocales, trackId]);
 
   useEffect(() => {
-    if (!dirty || !trackId || !selectedLocales.length || draftLoading) return;
+    if (!dirty || !trackId || draftLoading) return;
     const timer = setTimeout(() => {
       void saveDraft(true);
-    }, 900);
+    }, 500);
     return () => clearTimeout(timer);
     // saveDraft intentionally reads the current render snapshot; row/description
     // changes retrigger this debounce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descriptions, dirty, draftLoading, rows, selectedLocales, trackId]);
+  }, [descriptions, dirty, draftLoading, languageStates, rows, selectedLocales, trackId]);
 
-  useEffect(() => () => {
-    const snapshot = draftSnapshot.current;
-    if (!snapshot.dirty || !snapshot.trackId || !snapshot.selectedLocales.length) return;
-    for (const locale of snapshot.selectedLocales) {
-      void saveLyricDraft({
+  useEffect(() => {
+    const flushCurrentSnapshot = () => {
+      const snapshot = draftSnapshot.current;
+      if (!snapshot.dirty || !snapshot.trackId || !snapshot.locales.length) return;
+      void saveLyricStudioDraft({
         trackId: snapshot.trackId,
-        locale,
-        description: snapshot.descriptions[locale]?.trim() || null,
-        lines: editableLinesForLocale(snapshot.rows, locale),
+        languages: snapshot.locales.map((locale) => ({
+          locale,
+          description: snapshot.descriptions[locale]?.trim() || null,
+          lines: editableLinesForLocale(snapshot.rows, locale),
+        })),
       }).catch(() => undefined);
-    }
+    };
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') flushCurrentSnapshot();
+    });
+
+    return () => {
+      subscription.remove();
+      // Navigating away from Lyrics Studio flushes one complete multilingual
+      // snapshot in a single transaction: every known language, description,
+      // row, order and shared timestamp.
+      flushCurrentSnapshot();
+    };
   }, []);
+
+  function markLocaleTouched(locale: LocaleCode) {
+    knownLocales.current.add(locale);
+  }
 
   function markDirty() {
     dirtyRevision.current += 1;
@@ -283,20 +315,6 @@ export function LyricsStudio() {
 
   function toggleLocale(locale: LocaleCode) {
     setMessage(null);
-
-    // If a language is being hidden immediately after an edit, persist that
-    // language first instead of letting the autosave debounce lose it.
-    if (selectedLocales.includes(locale) && dirty && trackId) {
-      void saveLyricDraft({
-        trackId,
-        locale,
-        description: descriptions[locale]?.trim() || null,
-        lines: editableLinesForLocale(rows, locale),
-      }).catch((error) => {
-        setMessage({ tone: 'error', text: errorText(error, 'Could not autosave that lyric language.') });
-      });
-    }
-
     setSelectedLocales((current) => {
       if (current.includes(locale)) {
         if (current.length === 1) {
@@ -310,6 +328,7 @@ export function LyricsStudio() {
   }
 
   function replaceRowText(index: number, locale: LocaleCode, text: string) {
+    markLocaleTouched(locale);
     editRows((current) => current.map((row, rowIndex) => (
       rowIndex === index
         ? { ...row, texts: { ...row.texts, [locale]: text } }
@@ -360,7 +379,9 @@ export function LyricsStudio() {
   }
 
   async function saveDraft(silent = false): Promise<boolean> {
-    if (!trackId || !selectedLocales.length) return true;
+    if (!trackId) return true;
+    const locales = currentDraftLocales();
+    if (!locales.length) return true;
     const revision = dirtyRevision.current;
 
     if (!silent) {
@@ -369,12 +390,17 @@ export function LyricsStudio() {
     }
 
     try {
-      const saved = await Promise.all(selectedLocales.map((locale) => saveLyricDraft({
+      const payload = await saveLyricStudioDraft({
         trackId,
-        locale,
-        description: descriptions[locale]?.trim() || null,
-        lines: editableLinesForLocale(rows, locale),
-      })));
+        languages: locales.map((locale) => ({
+          locale,
+          description: descriptions[locale]?.trim() || null,
+          lines: editableLinesForLocale(rows, locale),
+        })),
+      });
+      const saved = payload.languages;
+
+      saved.forEach((draft) => knownLocales.current.add(draft.locale));
 
       setRows((current) => current.map((row, index) => {
         const lineIds = { ...(row.lineIds ?? {}) };
@@ -394,12 +420,10 @@ export function LyricsStudio() {
       });
 
       if (dirtyRevision.current === revision) setDirty(false);
-      if (!silent) {
-        setMessage({ tone: 'success', text: 'Draft saved.' });
-      }
+      if (!silent) setMessage({ tone: 'success', text: 'Draft saved.' });
       return true;
     } catch (error) {
-      setMessage({ tone: 'error', text: errorText(error, 'Could not save the lyric draft.') });
+      setMessage({ tone: 'error', text: errorText(error, 'Could not save the complete lyric draft.') });
       return false;
     } finally {
       if (!silent) setSaving(false);
@@ -411,17 +435,6 @@ export function LyricsStudio() {
 
     if (!rows.length) {
       setMessage({ tone: 'error', text: 'Add at least one lyric line before publishing.' });
-      return;
-    }
-
-    const incompleteText = selectedLocales.filter((locale) =>
-      rows.some((row) => !(row.texts[locale] ?? '').trim()),
-    );
-    if (incompleteText.length) {
-      setMessage({
-        tone: 'error',
-        text: `Fill every line for ${incompleteText.map(localeLabel).join(', ')} before publishing.`,
-      });
       return;
     }
 
@@ -457,6 +470,7 @@ export function LyricsStudio() {
 
   async function importLrc(locale: LocaleCode) {
     try {
+      markLocaleTouched(locale);
       const contents = await importLrcFile();
       if (contents === null) return;
       const parsed = createLyricLinesFromText(
@@ -531,6 +545,8 @@ export function LyricsStudio() {
       setMessage({ tone: 'info', text: 'Paste lyrics into at least one selected language first.' });
       return;
     }
+
+    parsedByLocale.forEach((_lines, locale) => markLocaleTouched(locale));
 
     const counts = [...new Set([...parsedByLocale.values()].map((lines) => lines.length))];
     if (counts.length !== 1) {
@@ -747,6 +763,7 @@ export function LyricsStudio() {
                     placeholderTextColor={COLORS.muted}
                     value={descriptions[locale] ?? ''}
                     onChangeText={(value) => {
+                      markLocaleTouched(locale);
                       setDescriptions((current) => ({ ...current, [locale]: value }));
                       markDirty();
                     }}
