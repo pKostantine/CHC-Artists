@@ -431,7 +431,9 @@ export function LyricsStudio() {
   }
 
   async function publishLyrics() {
-    if (!trackId || !selectedLocales.length) return;
+    if (!trackId) return;
+    const localesToPublish = currentDraftLocales();
+    if (!localesToPublish.length) return;
 
     if (!rows.length) {
       setMessage({ tone: 'error', text: 'Add at least one lyric line before publishing.' });
@@ -449,17 +451,17 @@ export function LyricsStudio() {
       const saved = await saveDraft(true);
       if (!saved) return;
 
-      await publishLyricLanguages(trackId, selectedLocales);
+      await publishLyricLanguages(trackId, localesToPublish);
       setLanguageStates((current) => {
         const next = { ...current };
-        selectedLocales.forEach((locale) => { next[locale] = 'published'; });
+        localesToPublish.forEach((locale) => { next[locale] = 'published'; });
         return next;
       });
       dirtyRevision.current += 1;
       setDirty(false);
       setMessage({
         tone: 'success',
-        text: `Published ${selectedLocales.map(localeLabel).join(', ')} lyrics to CHC.`,
+        text: `Published ${localesToPublish.map(localeLabel).join(', ')} lyrics to CHC.`,
       });
     } catch (error) {
       setMessage({ tone: 'error', text: errorText(error, 'Could not publish the lyrics.') });
@@ -488,10 +490,31 @@ export function LyricsStudio() {
       }
 
       if (rows.length && imported.length !== rows.length) {
-        setMessage({
-          tone: 'error',
-          text: `${localeLabel(locale)} has ${imported.length} imported lines, but the shared timeline has ${rows.length}. Add or remove synced lines first so every language stays aligned.`,
-        });
+        if (!(await confirmAction(
+          'Change the shared lyric row count?',
+          `${localeLabel(locale)} has ${imported.length} imported rows while the shared timeline has ${rows.length}. CHC will resize the shared timeline and keep other languages aligned with blank rows where needed. Existing timestamps are cleared because the row structure changed.`,
+          'Resize rows',
+        ))) return;
+
+        const nextCount = imported.length;
+        editRows((current) => Array.from({ length: nextCount }, (_, index) => {
+          const previous = current[index];
+          const texts: Record<string, string> = {};
+          LOCALES.forEach((item) => {
+            texts[item.value] = item.value === locale
+              ? (imported[index]?.text ?? '')
+              : (previous?.texts[item.value] ?? '');
+          });
+          return {
+            key: previous?.key ?? nextRowKey(),
+            startMs: imported[index]?.startMs ?? null,
+            endMs: imported[index]?.endMs ?? null,
+            texts,
+            lineIds: previous?.lineIds ?? {},
+          };
+        }));
+
+        setMessage({ tone: 'success', text: `Imported ${localeLabel(locale)} and resized the shared lyric timeline.` });
         return;
       }
 
@@ -548,48 +571,34 @@ export function LyricsStudio() {
 
     parsedByLocale.forEach((_lines, locale) => markLocaleTouched(locale));
 
-    const counts = [...new Set([...parsedByLocale.values()].map((lines) => lines.length))];
-    if (counts.length !== 1) {
-      const details = [...parsedByLocale.entries()]
-        .map(([locale, lines]) => `${localeLabel(locale)}: ${lines.length}`)
-        .join(' · ');
-      setMessage({
-        tone: 'error',
-        text: `The pasted languages need the same number of lines so they can share timestamps. ${details}`,
-      });
-      return;
-    }
-
-    const lineCount = counts[0] ?? 0;
+    const lineCount = Math.max(
+      0,
+      ...[...parsedByLocale.values()].map((lines) => lines.length),
+    );
     if (!lineCount) return;
 
     if (rows.length && rows.length !== lineCount) {
-      const allEditableSelectedPasted = editableSelected.every((locale) => parsedByLocale.has(locale));
-      if (!allEditableSelectedPasted) {
-        setMessage({
-          tone: 'error',
-          text: `The shared timeline has ${rows.length} lines, but the pasted lyrics have ${lineCount}. Paste all selected editable languages before replacing the line structure, or use Add line and drag the blocks into place in Sync.`,
-        });
-        return;
-      }
-
       if (!(await confirmAction(
         'Replace the synced line structure?',
-        `The timeline has ${rows.length} lines and the pasted languages have ${lineCount}. Replacing it clears the current timestamps so every language can be realigned together.`,
-        'Replace lines',
+        `The shared timeline has ${rows.length} rows and the pasted lyrics need ${lineCount}. CHC will resize the shared timeline, keep untouched language text where the same row still exists, and fill missing language rows with blanks. Existing timestamps are cleared because the row structure changed.`,
+        'Replace rows',
       ))) return;
 
       const nextRows = Array.from({ length: lineCount }, (_, index) => {
+        const previous = rows[index];
         const texts: Record<string, string> = {};
         LOCALES.forEach((item) => {
-          texts[item.value] = parsedByLocale.get(item.value)?.[index]?.text ?? '';
+          const pasted = parsedByLocale.get(item.value);
+          texts[item.value] = pasted
+            ? (pasted[index]?.text ?? '')
+            : (previous?.texts[item.value] ?? '');
         });
         return {
-          key: nextRowKey(),
+          key: previous?.key ?? nextRowKey(),
           startMs: null,
           endMs: null,
           texts,
-          lineIds: {},
+          lineIds: previous?.lineIds ?? {},
         };
       });
       editRows(() => nextRows);
