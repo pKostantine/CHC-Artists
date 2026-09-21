@@ -18,18 +18,29 @@ const TABS: { active: Exclude<ArtistTab, null>; href: Href; icon: IconName; labe
   { active: 'profile', href: '/profile', icon: 'person-outline', label: 'Profile' },
 ];
 
+function isStandaloneWebApp() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return false;
+  const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
+  return standaloneNavigator.standalone === true
+    || window.matchMedia?.('(display-mode: standalone)').matches === true;
+}
+
 export default function BottomTabBar({ active }: BottomTabBarProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const isCompactLandscape = width > height && height <= 599;
+  // iOS standalone PWAs already receive a viewport that accounts for the
+  // home-indicator area. Applying the web safe-area inset again creates a
+  // large empty block below the tabs in Safari home-screen apps.
+  const needsBrowserBottomInset = Platform.OS === 'web' && !isStandaloneWebApp();
   const iconSize = isCompactLandscape ? 22 : 27;
 
   return (
     <View style={styles.shell}>
       <View
         accessibilityRole="tablist"
-        style={[styles.bar, Platform.OS === 'web' && { paddingBottom: insets.bottom }]}
+        style={[styles.bar, needsBrowserBottomInset && { paddingBottom: insets.bottom }]}
       >
         {TABS.map((tab) => {
           const selected = active === tab.active;
