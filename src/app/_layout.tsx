@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { AppShell } from '@/components/AppShell';
+import NotificationBootstrap from '@/components/NotificationBootstrap';
 import { SignInScreen } from '@/components/SignInScreen';
 import { Loading } from '@/components/ui';
 import { COLORS } from '@/constants/theme';
@@ -83,6 +84,7 @@ export default function RootLayout() {
     // Keyed by user so switching accounts never shows the previous creator's data.
     content = (
       <WorkspaceProvider key={session.user.id}>
+        <NotificationBootstrap />
         <AppShell>
           <AppStack />
         </AppShell>
