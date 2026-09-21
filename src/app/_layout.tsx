@@ -99,5 +99,5 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, overflow: 'hidden', backgroundColor: COLORS.black },
+  root: { flex: 1, backgroundColor: COLORS.black },
 });

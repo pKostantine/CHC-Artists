@@ -157,8 +157,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  wideRoot: { flex: 1, flexDirection: 'row', overflow: 'hidden', backgroundColor: COLORS.black },
-  narrowRoot: { flex: 1, overflow: 'hidden', backgroundColor: COLORS.black },
+  wideRoot: { flex: 1, flexDirection: 'row', backgroundColor: COLORS.black },
+  narrowRoot: { flex: 1, backgroundColor: COLORS.black },
   sidebar: {
     width: 252,
     padding: SPACING.lg,
