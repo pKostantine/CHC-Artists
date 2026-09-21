@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import BottomTabBar, { type ArtistTab } from '@/components/BottomTabBar';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { disableNativeNotificationDevice } from '@/services/notificationService';
 import { supabase } from '@/services/supabase';
 
 const SECTIONS: { href: Href; match: string; label: string; description: string; tab: Exclude<ArtistTab, null> }[] = [
@@ -45,10 +46,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.replace(href);
   };
 
+  const signOutAccount = async () => {
+    try {
+      await disableNativeNotificationDevice();
+    } catch (error) {
+      console.warn('Unable to detach this device from CHC Artists notifications before sign-out:', error);
+    }
+    await supabase.auth.signOut();
+  };
+
   const signOut = (
     <Pressable
       accessibilityRole="button"
-      onPress={() => void supabase.auth.signOut()}
+      onPress={() => void signOutAccount()}
       hitSlop={10}
       style={({ pressed }) => pressed && styles.pressed}
     >

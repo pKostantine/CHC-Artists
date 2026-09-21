@@ -34,7 +34,8 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-url-polyfill": "3.0.0",
-    "react-native-web": "0.21.0"
+    "react-native-web": "0.21.0",
+    "expo-notifications": "~57.0.20"
   },
   "devDependencies": {
     "@types/react": "19.2.2",
