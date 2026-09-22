@@ -12,23 +12,26 @@ The concept is similar to platforms such as **Spotify for Artists** and **Apple 
 
 CHC Artists is separate from the main CHC listener experience.
 
-The main **CHC app** is where users discover and listen to hymns, songs, liturgical recordings, albums, playlists, and other audio.
+The main **CHC app** is where users discover and listen to hymns, songs, liturgical recordings, albums, playlists, synchronized lyrics, and learning content.
 
-**CHC Artists** is the management side of that ecosystem.
+**CHC Artists** is the creator-management side of that ecosystem. It currently gives approved creators a place to:
 
-Artists can use it to:
+- manage an artist workspace and profile
+- create music releases, learning albums, and lesson sets
+- upload artwork and multiple audio files
+- reorder tracks before submission
+- enter localized release and track titles
+- assign per-track credits and contributor roles
+- choose ASAP or scheduled release timing
+- monitor automatic media processing
+- submit work for CHC review
+- manage released music separately from active submissions
+- edit published release metadata, artwork, tracks, credits, and timing
+- permanently remove releases or tracks when permitted
+- create and publish synchronized multilingual lyrics
+- use the creator portal across desktop, mobile, tablet, and installed web-app layouts
 
-- Create and manage an artist account
-- Sign in using supported authentication methods, including Google
-- Manage their artist profile
-- Submit tracks, albums, and other releases
-- Upload audio and artwork
-- Track the status of submitted releases
-- Manage published content
-- View performance and audience information
-- Access future artist monetization tools
-
-The goal is to give creators a professional publishing experience while keeping all content integrated with the wider CHC platform.
+The goal is to provide a professional creator workflow while keeping all published content integrated with the wider CHC platform.
 
 ---
 
@@ -51,135 +54,123 @@ Not every CHC user needs a CHC Artists account. The app is specifically for peop
 
 ## Core Features
 
-### Artist Accounts
+### Artist Accounts and Workspaces
 
-Artists can create an account and access their own creator dashboard.
+Authentication is powered by Supabase and supports email/password plus Google sign-in.
 
-Authentication is powered through the CHC backend and supports standard account creation as well as supported third-party sign-in methods such as Google.
-
----
+A creator can work inside the artist workspace or workspaces connected to their account. Workspace switching is available when an account manages more than one creator identity.
 
 ### Artist Profiles
 
-Each artist can have a dedicated profile containing information such as:
+Each artist has an editable CHC profile that can include:
 
-- Artist name
-- Profile image
-- Biography
-- Artist type
-- Social or external links
-- Published releases
-- Associated tracks and albums
+- artist name
+- profile image
+- biography
+- artist type
+- social and external links
+- published releases
+- pinned or featured profile content
 
-Artist profiles are designed to connect directly with the artist pages shown inside the main CHC app.
+Profile changes are designed to flow through to the artist page shown in the main CHC app.
 
----
+### Release and Learning Submissions
 
-### Release Submissions
+Creators can prepare:
 
-Artists can prepare and submit content for publication on CHC.
+- **Music releases**
+- **Learning albums**
+- **Lesson sets**
 
-A submission may include:
+Music submissions support multiple audio files, real drag-and-drop on web, real track reordering, artwork uploads, localized release titles, localized per-track titles, recording/music classifications, and detailed credits.
 
-- Track title
-- Artist information
-- Album or release information
-- Audio file
-- Cover artwork
-- Hymn or song metadata
-- Language
-- Release date
-- Credits
-- Additional publishing information
+CHC automatically determines whether a music release is a Single, EP, or Album from its track count.
 
-Uploaded files are processed before the submission is finalized.
+Large masters use multipart upload support, and media processing begins automatically after files are uploaded rather than waiting for admin approval.
 
-The submission system is designed so that artists can clearly see the upload and processing state of every file before submitting a release.
+### Release Timing
 
----
+Music releases support two timing modes:
+
+- **Release as soon as possible** — the approved release can go live immediately.
+- **Scheduled release** — the creator chooses a date and time at least 48 hours in the future, and the approved release is published automatically when that time arrives.
+
+The native apps use platform date/time pickers, while web uses the corresponding web controls.
 
 ### Submission Review
 
-Content submitted through CHC Artists can go through a review process before becoming publicly available.
+Submissions move through the CHC review workflow after their required media is ready.
 
-Possible submission states may include:
+Creators can see upload and processing state, review status, requested changes, and relevant processing failures. Normal media processing happens before review; admin processing controls are intended mainly for exceptions and recovery.
 
-- Draft
-- Uploading
-- Processing
-- Submitted
-- Under Review
-- Approved
-- Rejected
-- Published
+### Released Content Management
 
-This allows CHC to maintain consistent metadata, audio quality, artwork quality, and content standards across the platform.
+Published music is separated from in-progress submissions in the **Releases** section.
 
----
+Creators can manage supported release details including:
 
-### Content Management
+- release metadata
+- artwork replacement
+- track metadata
+- localized track titles
+- named credits and roles
+- release timing
+- track deletion
+- release deletion
 
-After publication, artists can manage the releases connected to their account.
+Artwork replacement is versioned so the newest approved artwork becomes the current image across CHC.
 
-Depending on the release and account permissions, this may include:
+### Lyrics Studio
 
-- Viewing published tracks
-- Viewing albums and releases
-- Updating selected metadata
-- Managing artwork
-- Reviewing release status
-- Requesting changes
-- Managing future releases
+Lyrics Studio uses one shared synchronized timeline for:
 
----
+1. English
+2. French
+3. Coptic
+4. Arabic
 
-### Artist Analytics
+Each row shares the same timestamp while allowing any language cell to be blank. This supports mixed-language tracks without forcing every line to exist in every language.
 
-CHC Artists is intended to provide artists with information about how their content performs across the CHC platform.
+The studio supports:
 
-Analytics can include information such as:
+- audio playback while timing
+- timestamp editing
+- row reordering
+- multilingual text on a shared timeline
+- LRC import/export
+- draft saving
+- draft restoration with all languages, timestamps, directions, and optional text preserved
+- publishing one or more lyric languages
 
-- Total plays
-- Unique listeners
-- Popular tracks
-- Popular releases
-- Listening trends
-- Audience growth
-- Geographic or platform-level statistics where appropriate
+Coptic lyric fields use the CHC Coptic font while Arabic retains right-to-left handling.
 
-The objective is to help artists understand how their recordings are being discovered and used without requiring access to CHC's internal administrative systems.
+### Responsive Creator UI
 
----
+Desktop uses a sidebar layout. Phones, tablets, and touch-first installed web apps use a bottom navigation bar with safe-area handling for Safari/PWA layouts.
 
-### Monetization
+### Notifications
 
-CHC Artists is being designed with future monetization support in mind.
-
-This may eventually allow eligible artists to:
-
-- Enable monetization for approved content
-- View monetized plays
-- Review estimated earnings
-- View revenue history
-- Manage payout information
-- Access statements and reporting
-
-Any monetization system will require its own eligibility, legal, advertising, payment, and rights-management processes before being made generally available.
+CHC Artists includes the shared CHC notification registration infrastructure so creator-facing notifications can be delivered through the same notification platform as the main CHC app.
 
 ---
 
 ## App Sections and URLs
 
-CHC Artists is one app with two sections, each at its own address (Expo Router, `src/app/`):
+CHC Artists uses Expo Router and currently has four top-level creator sections:
 
 | URL | What it is |
 | --- | --- |
-| `/submission` | Dashboard: every submission and its review status |
-| `/submission/new` | New music release, learning album, or lesson set |
-| `/submission/<id>` | One submission: files, processing state, and the requested-changes flow |
-| `/lyrics` | Lyrics Studio for synchronized lyrics |
+| / | **Submissions** dashboard: drafts, review state, and requested changes |
+| /submission/new | Create a new music release, learning album, or lesson set |
+| /submission/<id> | Submission detail, files, processing state, and review feedback |
+| /releases | Released and release-ready music managed separately from submissions |
+| /release/<id> | Edit one released music item |
+| /lyrics | Lyrics Studio for synchronized multilingual lyrics |
+| /profile | Artist profile image, biography, links, and profile settings |
 
-`/` redirects to `/submission`. Signing in keeps the address the creator asked for, so a link to `/lyrics` lands in Lyrics Studio after sign-in. On native the same routes are deep links under the `chcartists://` scheme.
+Top-level navigation uses client-side routing so installed web apps remain inside the same PWA instead of appearing to open external pages. On native platforms the same routes are available through the chcartists:// scheme.
+
+---
 
 ## Development
 
@@ -268,18 +259,22 @@ This keeps large media files separate from the application's primary relational 
 
 ## Typical Artist Workflow
 
-A typical release workflow looks like this:
+A typical music-release workflow is:
 
-1. **Create or sign in to a CHC Artists account**
-2. **Create or claim an artist profile**
-3. **Start a new submission**
-4. **Enter the release metadata**
-5. **Upload audio and artwork**
-6. **Wait for all files to finish uploading and processing**
-7. **Submit the release for review**
-8. **CHC reviews the submission**
-9. **Approved content is published to the CHC platform**
-10. **The artist can monitor and manage the release from CHC Artists**
+1. **Sign in to CHC Artists**
+2. **Choose the creator workspace**
+3. **Start a new music release**
+4. **Enter localized release metadata and release timing**
+5. **Add artwork and one or more audio files**
+6. **Reorder tracks and enter each track's localized titles and credits**
+7. **Wait for automatic upload processing to complete**
+8. **Submit the release for CHC review**
+9. **Respond to requested changes if necessary**
+10. **After approval, publish immediately for ASAP releases or automatically at the scheduled date/time**
+11. **Manage the released item from the Releases section**
+12. **Add and publish synchronized lyrics from Lyrics Studio when needed**
+
+Learning albums and lesson sets use the same creator foundation with learning-specific metadata and contributors.
 
 ---
 
@@ -315,25 +310,30 @@ The platform should be able to grow from basic release submissions into a more c
 
 ---
 
-## Current Development Areas
+## Current Implementation Highlights
 
-Development is currently focused on building the core artist platform, including:
+The current creator platform includes:
 
-- Authentication and account creation
+- Supabase authentication and creator workspaces
 - Google sign-in
-- Artist onboarding
-- Artist profiles
-- Release creation
-- Audio uploads
-- Artwork uploads
-- Upload progress and processing
-- Submission validation
-- Submission review workflows
-- CHC backend integration
-- Cloudflare media integration
-- Cross-platform Expo support
+- artist profile editing
+- multi-file and multipart uploads
+- drag-and-drop and manual track ordering
+- automatic media processing after upload
+- detailed per-track metadata and credits
+- localized release and track titles
+- ASAP and scheduled release timing
+- review and requested-changes workflows
+- separate submission and release management
+- release editing and deletion controls
+- artwork replacement and versioning
+- multilingual synchronized Lyrics Studio
+- complete lyric draft preservation
+- responsive desktop/mobile/tablet/PWA navigation
+- CHC Artists branding and installable web-app assets
+- shared CHC notification infrastructure
 
-Additional creator tools will continue to be added as the CHC audio platform expands.
+The app remains under active development, but the core creator publishing workflow is implemented end to end.
 
 ---
 
@@ -341,25 +341,21 @@ Additional creator tools will continue to be added as the CHC audio platform exp
 
 Potential future additions include:
 
-- Advanced artist analytics
-- Revenue dashboards
-- Audio advertising
-- Artist monetization
-- Payout management
-- Release scheduling
-- Team and manager access
-- Multiple artists under one account
-- Collaboration credits
-- Lyrics and hymn text management
-- Copyright and rights information
-- Content ownership tools
-- Notifications
-- Artist verification
-- Release editing and takedown requests
-- Promotional tools
-- Featured release management
+- advanced artist analytics
+- listener and audience insights
+- revenue dashboards
+- audio advertising
+- artist monetization
+- payout management
+- team and manager access
+- expanded collaboration workflows
+- copyright and rights-management tools
+- artist verification
+- takedown/request workflows
+- promotional tools
+- featured-release campaign tools
 
-These features are part of the broader direction of CHC Artists and may be implemented gradually.
+These are longer-term platform directions rather than descriptions of the currently shipped creator workflow.
 
 ---
 
@@ -375,6 +371,8 @@ The long-term goal of CHC is to provide a unified digital platform for Coptic Or
 
 ## Status
 
-CHC Artists is currently under active development.
+CHC Artists is under active development, with the core creator workflow already implemented across web and Expo-based native targets.
 
-Features, architecture, workflows, and interfaces may change as the platform continues to evolve.
+The current app supports creator workspaces, profile management, multi-track submissions, automatic processing, review workflows, ASAP and scheduled releases, released-content editing, synchronized multilingual lyrics, responsive mobile/tablet navigation, and shared CHC notification infrastructure.
+
+Additional analytics, monetization, rights-management, and creator-growth tools can be layered onto this foundation as the CHC audio platform expands.
