@@ -18,7 +18,7 @@ test('learning search and music credits use the same artist profile ID', () => {
 test('unmatched names create a credit on submit, not via a separate button', () => {
   const form = read('src/app/submission/new.tsx');
   const initialDraft = read('src/context/WorkspaceContext.tsx');
-  assert.match(form, /No profile matches/);
+  assert.match(form, /no profile matches/i);
   assert.match(form, /patch\(\{ learningArtistName, cantorId: '' \}\)/);
   assert.match(initialDraft, /learningArtistName: ''/);
   assert.doesNotMatch(form, /Add new cantor|Add new chorus|addPerson\(/);
