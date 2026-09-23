@@ -113,6 +113,63 @@ function LearningContributorPicker({ allowChorus, options, value, onChange, acco
   );
 }
 
+function LearningHymnPicker({ accountId, options, value, onChange }: {
+  accountId: string | undefined;
+  options: CatalogOption[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [created, setCreated] = useState<CatalogOption | null>(null);
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const choices = created && !options.some((item) => item.id === created.id)
+    ? [...options, created]
+    : options;
+
+  async function addHymn() {
+    if (!accountId || !newName.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const next = await creatorService.createHymn(accountId, newName.trim());
+      setCreated(next);
+      onChange(next.id);
+      setNewName('');
+    } catch (cause) {
+      setError(creatorService.describeError(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.group}>
+      <Dropdown
+        label="Hymn"
+        items={choices}
+        value={value}
+        onChange={onChange}
+        placeholder={choices.length ? 'Select an existing hymn' : 'No learning hymns yet'}
+      />
+      <Text style={uiStyles.muted}>Can't find the hymn? Add its title. CHC will review it with your lesson set.</Text>
+      <Field
+        label="New hymn name"
+        value={newName}
+        onChangeText={(text) => { setNewName(text); setError(''); }}
+        placeholder="Enter the hymn you are teaching"
+      />
+      <Button
+        label="Add new hymn"
+        onPress={() => void addHymn()}
+        busy={busy}
+        disabled={!accountId || !newName.trim()}
+      />
+      {!!error && <Banner tone="error">{error}</Banner>}
+    </View>
+  );
+}
+
 function FileRow({ file, index, previewing, onPreview, onRetry, onRemove, dragHandle }: {
   file: UploadCandidate;
   index?: number;
@@ -461,12 +518,12 @@ export default function NewSubmission() {
                 : <Text style={uiStyles.muted}>No seasons are published yet.</Text>}
             </View>
             {draft.mode === 'learning_lesson_set' && (
-              <View style={styles.group}>
-                <Label>Hymn</Label>
-                {catalog.hymns.length
-                  ? <Chips items={catalog.hymns} value={draft.hymnId} onChange={(hymnId) => patch({ hymnId })} />
-                  : <Text style={uiStyles.muted}>No hymns are published yet, so lesson sets cannot be submitted.</Text>}
-              </View>
+              <LearningHymnPicker
+                accountId={account?.id}
+                options={catalog.hymns}
+                value={draft.hymnId}
+                onChange={(hymnId) => patch({ hymnId })}
+              />
             )}
             <View style={styles.group}>
               <Label>Release timing</Label>
