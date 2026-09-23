@@ -95,7 +95,7 @@ export interface FilenameOrderHint { disc: number; position: number }
  */
 export function guessFilenameOrder(filename: string): FilenameOrderHint | null {
   const base = withoutExtension(filename).trim();
-  const discTrack = base.match(/^(?:disc|disk|cd)\s*0*(\d{1,2})\s*(?:[._)-]\s*|[-–—]\s*|\s+)(?:(?:track|lesson|part|recording|episode)\s*)?0*(\d{1,3})(?=$|[\s._)–—-])/i);
+  const discTrack = base.match(/^(?:disc|disk|cd)\s*0*(\d{1,2})\s*(?:[._)-]\s*|[-–—]\s*|\s+)(?:(?:track|lesson|part|recording|episode)\s*)?0*(\d{1,3})(?=$|[a-z\s._)–—-])/i);
   if (discTrack) return { disc: Number(discTrack[1]), position: Number(discTrack[2]) };
   const nested = base.match(/^0*(\d{1,2})[._)]\s*0*(\d{1,3})(?=$|[\s._)–—-])/i);
   if (nested) return { disc: Number(nested[1]), position: Number(nested[2]) };
