@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { FileDropZone } from '@/components/FileDropZone';
+import { FileSelectButton } from '@/components/FileSelectButton';
 import { MediaPreview } from '@/components/MediaPreview';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
 import { ReorderableList } from '@/components/ReorderableList';
@@ -14,7 +15,7 @@ import { creatorService } from '@/services/creatorService';
 import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, UploadCandidate } from '@/types/creator';
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
-import { droppedUploadCandidates, pickUploadCandidates, uploadsBlocking } from '@/utils/uploads';
+import { droppedUploadCandidates, uploadsBlocking } from '@/utils/uploads';
 import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
 
 const MODES: { id: SubmissionMode; title: string }[] = [
@@ -267,6 +268,7 @@ export default function NewSubmission() {
 
   function addMedia(picked: UploadCandidate[]) {
     if (!picked.length) return;
+    setSubmitError('');
     setDraft((current) => ({
       ...current,
       media: [...current.media, ...picked],
@@ -275,19 +277,11 @@ export default function NewSubmission() {
     picked.forEach(uploadDraftFile);
   }
 
-  async function pick(kind: 'artwork' | 'media') {
-    setSubmitError('');
-    const picked = await pickUploadCandidates(
-      kind === 'artwork' ? 'image' : draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio',
-      kind === 'media',
-    );
+  function receiveArtwork(picked: UploadCandidate[]) {
     if (!picked.length) return;
-    if (kind === 'artwork') {
-      setDraft((current) => ({ ...current, artwork: picked[0] }));
-      picked.forEach(uploadDraftFile);
-    } else {
-      addMedia(picked);
-    }
+    setSubmitError('');
+    setDraft((current) => ({ ...current, artwork: picked[0] }));
+    uploadDraftFile(picked[0]);
   }
 
   function receiveDroppedFiles(raw: any[]) {
@@ -296,8 +290,8 @@ export default function NewSubmission() {
     const picked = droppedUploadCandidates(raw, kind);
     if (!picked.length) {
       setSubmitError(draft.mode === 'learning_lesson_set'
-        ? 'Drop audio or video lesson files here.'
-        : 'Drop supported audio files here.');
+        ? 'Choose supported audio or video lesson files.'
+        : 'Choose supported audio files.');
       return;
     }
     addMedia(picked);
@@ -564,8 +558,19 @@ export default function NewSubmission() {
         />
 
         <View style={uiStyles.actions}>
-          <Button label={draft.artwork ? 'Replace artwork' : 'Choose artwork'} onPress={() => void pick('artwork')} />
-          <Button label={draft.mode === 'learning_lesson_set' ? 'Add lesson files' : 'Add audio files'} onPress={() => void pick('media')} />
+          <FileSelectButton
+            label={draft.artwork ? 'Replace artwork' : 'Choose artwork'}
+            kind="image"
+            onFiles={receiveArtwork}
+            onError={setSubmitError}
+          />
+          <FileSelectButton
+            label={draft.mode === 'learning_lesson_set' ? 'Add lesson files' : 'Add audio files'}
+            kind={draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'}
+            multiple
+            onFiles={addMedia}
+            onError={setSubmitError}
+          />
         </View>
 
         {draft.artwork && (
