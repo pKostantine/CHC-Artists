@@ -19,7 +19,7 @@ interface Props {
   onSelect: (person: ContributorSuggestion) => void;
 }
 
-/** Search by name or a near match before creating another artist/cantor. */
+/** All CHC submissions search the same canonical artist identities and photos. */
 export function ContributorSearchField({
   accountId, label, value, selectedId, kind, allowKinds,
   placeholder, hint, onTextChange, onSelect,
@@ -78,7 +78,7 @@ export function ContributorSearchField({
           {searching && <Text style={uiStyles.muted}>Finding similar CHC profiles…</Text>}
           {!!error && <Text style={uiStyles.error}>{error}</Text>}
           {!searching && !error && !matches.length && (
-            <Text style={uiStyles.muted}>No matching profiles. You can use this name to create a new credit.</Text>
+            <Text style={uiStyles.muted}>No matching profiles. Keep the name and CHC will create a reusable artist credit when you submit.</Text>
           )}
           {matches.map((person) => {
             const image = person.profileImage
