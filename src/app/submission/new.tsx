@@ -27,7 +27,7 @@ const MODES: { id: SubmissionMode; title: string }[] = [
 const MODE_HELP: Record<SubmissionMode, string> = {
   music: 'Enter the release title, choose the release details, then add audio. Track titles are guessed from filenames and remain editable. CHC determines Single, EP, or Album automatically.',
   learning_album: 'Enter the album title, choose a cantor or chorus, and add the recordings. Each recording gets its own editable multilingual title and a suggested order from its filename.',
-  learning_lesson_set: 'Enter the lesson set title, choose a cantor, and add the lessons. Each lesson gets its own editable multilingual title and a suggested order from its filename.',
+  learning_lesson_set: 'Enter the lesson set title, choose a cantor, and add one or more ordered lessons for the same hymn.',
 };
 
 const MUSIC_TYPE_OPTIONS = [
@@ -224,7 +224,7 @@ export default function NewSubmission() {
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
   draft.media.forEach((file, index) => {
     const itemKind = isMusic ? 'track' : draft.mode === 'learning_album' ? 'recording' : 'lesson';
-    if (!hasMusicTitle(file.localizedTitle)) {
+    if (draft.mode !== 'learning_lesson_set' && !hasMusicTitle(file.localizedTitle)) {
       problems.push(`Add a title in at least one language for ${itemKind} ${index + 1}.`);
     }
     if (isMusic && (file.contributors ?? []).some((credit) => !credit.name.trim())) {
@@ -572,20 +572,27 @@ export default function NewSubmission() {
                 onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
                 dragHandle={dragHandle}
               />
-              <TrackMetadataEditor
-                value={file}
-                index={index}
-                total={draft.media.length}
-                kind={isMusic ? 'track' : draft.mode === 'learning_album' ? 'recording' : 'lesson'}
-                showCredits={isMusic}
-                identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
-                accountId={account?.id}
-                onCopyCreditsToAll={isMusic ? () => copyCreditsToAll(file.id) : undefined}
-                onChange={(change) => setDraft((current) => ({
-                  ...current,
-                  media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
-                }))}
-              />
+              {draft.mode === 'learning_lesson_set' ? (
+                <View style={styles.lessonIdentity}>
+                  <Text style={styles.lessonIdentityTitle}>Lesson {index + 1}</Text>
+                  <Text style={uiStyles.muted}>The order defines the lesson number. Individual lesson titles are not needed.</Text>
+                </View>
+              ) : (
+                <TrackMetadataEditor
+                  value={file}
+                  index={index}
+                  total={draft.media.length}
+                  kind={isMusic ? 'track' : 'recording'}
+                  showCredits={isMusic}
+                  identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
+                  accountId={account?.id}
+                  onCopyCreditsToAll={isMusic ? () => copyCreditsToAll(file.id) : undefined}
+                  onChange={(change) => setDraft((current) => ({
+                    ...current,
+                    media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
+                  }))}
+                />
+              )}
             </View>
           )}
         />
@@ -602,10 +609,12 @@ export default function NewSubmission() {
         </Text>
         {draft.media.length > 0 && (
           <View style={styles.group}>
-            <Label>{isMusic ? 'Track order and titles' : draft.mode === 'learning_album' ? 'Recording order and titles' : 'Lesson order and titles'}</Label>
+            <Label>{isMusic ? 'Track order and titles' : draft.mode === 'learning_album' ? 'Recording order and titles' : 'Lesson order'}</Label>
             {draft.media.map((file, index) => (
               <Text key={file.id} style={uiStyles.muted}>
-                {index + 1}. {preferredLocalizedTitle(file.localizedTitle) || 'Title required'}
+                {draft.mode === 'learning_lesson_set'
+                  ? `Lesson ${index + 1}`
+                  : `${index + 1}. ${preferredLocalizedTitle(file.localizedTitle) || 'Title required'}`}
               </Text>
             ))}
           </View>
@@ -647,6 +656,8 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.surfaceSoft,
   },
+  lessonIdentity: { gap: 4, paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
+  lessonIdentityTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.body, fontSize: 16, fontWeight: '800' },
   fileActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: COLORS.border, overflow: 'hidden', marginTop: 4 },
   progressFill: { height: 4, backgroundColor: COLORS.gold },

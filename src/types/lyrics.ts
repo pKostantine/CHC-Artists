@@ -1,5 +1,6 @@
 export type LyricKind = 'original' | 'translation' | 'transliteration';
 export type LyricSyncPrecision = 'unsynced' | 'line' | 'word';
+export type LyricTargetType = 'music_track' | 'learning_album_recording' | 'learning_lesson';
 export type LocaleCode = 'cop' | 'ar' | 'en' | 'fr' | (string & {});
 
 export interface EditableLyricLine {
@@ -12,6 +13,8 @@ export interface EditableLyricLine {
 
 export interface LyricEditorTrack {
   id: string;
+  targetType: LyricTargetType;
+  maxSyncPrecision: 'unsynced' | 'line';
   title: string;
   subtitle: string | null;
   durationMs: number | null;
@@ -34,6 +37,7 @@ export interface LyricDraft {
   description: string | null;
   publicationStatus: string;
   hasDraft?: boolean;
+  syncPrecision?: 'unsynced' | 'line';
   lines: EditableLyricLine[];
 }
 
