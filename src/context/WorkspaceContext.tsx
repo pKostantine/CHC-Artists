@@ -30,6 +30,7 @@ export const emptyDraft = (): CreatorDraft => ({
   hymnId: '',
   localizedTitle: { en: '', ar: '', cop: '', fr: '' },
   media: [],
+  mediaOrderManuallySet: false,
   releaseTimingMode: 'asap',
   scheduledReleaseAt: defaultReleaseDate(),
   originalReleaseDate: '',
