@@ -22,6 +22,7 @@ interface EditableTrack {
   title: string;
   localizedTitle: LocalizedMetadata;
   mainArtistName: string;
+  mainArtistId?: string;
   contributors: TrackContributor[];
   upload?: UploadCandidate;
   publicationStatus?: string;
@@ -119,7 +120,11 @@ export default function EditRelease() {
       title: track.title,
       localizedTitle: track.localizedTitle ?? { en: track.title, ar: '', cop: '', fr: '' },
       mainArtistName: track.mainArtistName ?? '',
-      contributors: track.contributors ?? [],
+      mainArtistId: track.mainArtistName ? track.mainArtist?.id : undefined,
+      contributors: (track.contributors ?? []).map((credit) => ({
+        ...credit,
+        artistId: credit.artistId ?? credit.id?.split(':')[0],
+      })),
       publicationStatus: track.publicationStatus,
     })));
   }, []);
@@ -154,6 +159,7 @@ export default function EditRelease() {
         title: preferredLocalizedTitle(file.localizedTitle) || file.name.replace(/\.[a-z0-9]+$/i, ''),
         localizedTitle: file.localizedTitle ?? { en: '', ar: '', cop: '', fr: '' },
         mainArtistName: file.mainArtistName ?? '',
+        mainArtistId: file.mainArtistId,
         contributors: file.contributors ?? [],
         upload: file,
       })),
@@ -220,6 +226,7 @@ export default function EditRelease() {
           : {
               ...track,
               mainArtistName: source.mainArtistName,
+              mainArtistId: source.mainArtistId,
               contributors: source.contributors.map((credit, index) => ({
                 ...credit,
                 id: `${stamp}-${index}-${track.key}`,
@@ -341,6 +348,7 @@ export default function EditRelease() {
           title: preferredLocalizedTitle(track.localizedTitle) || track.title,
           localizedTitle: track.localizedTitle,
           mainArtistName: track.mainArtistName,
+          mainArtistId: track.mainArtistId,
           contributors: track.contributors,
         })),
       });
@@ -562,6 +570,7 @@ export default function EditRelease() {
                 index={index}
                 total={tracks.length}
                 identityName={identityName}
+                accountId={account?.id}
                 onCopyCreditsToAll={() => copyCreditsToAll(track.key)}
                 onChange={(change) => patchTrack(track.key, change)}
               />
