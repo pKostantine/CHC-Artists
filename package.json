@@ -11,7 +11,9 @@
     "build": "expo export -p web",
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test:submissions": "node --test tests/submissionIdentity.test.cjs"
+    "test:submissions": "node --test tests/submissionIdentity.test.cjs",
+    "test:mobile-files": "node --test tests/mobileFilePickers.test.cjs",
+    "test": "npm run test:submissions && npm run test:mobile-files"
   },
   "dependencies": {
     "@expo/ui": "57.0.18",
