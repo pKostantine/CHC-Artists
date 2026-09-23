@@ -200,7 +200,10 @@ export interface CreatorDraft {
   /** Recording presentation persisted to the catalogue. */
   recordingType: string;
   artistId: string;
+  /** Canonical music.artists ID for learning, not a second cantor identity. */
   cantorId: string;
+  /** Typed name used to find or create an artist when no existing profile was selected. */
+  learningArtistName: string;
   seasonId: string;
   hymnId: string;
   localizedTitle: LocalizedMetadata;
