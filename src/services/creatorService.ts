@@ -350,6 +350,9 @@ export const creatorService = {
           || file.title?.trim()
           || file.name.replace(/\.[^./]+$/, ''),
         role: 'media',
+        // The database resolves this name against the canonical artist
+        // catalogue when an existing profile ID was not selected.
+        learningArtistName: isMusic ? null : (draft.learningArtistName.trim() || null),
         // Recording and lesson titles are independent of their parent title.
         // Preserve each language through processing and scheduled publishing.
         localizedTitles: file.localizedTitle ?? {},
@@ -371,6 +374,8 @@ export const creatorService = {
       p_music_type: isMusic ? draft.musicType.trim() || null : null,
       p_recording_type: isMusic ? draft.recordingType.trim() || null : null,
       p_artist_id: isMusic ? draft.artistId || null : null,
+      // The parameter name is retained for older database clients, but the
+      // new learning form sends the selected music.artists ID here.
       p_cantor_id: isMusic ? null : draft.cantorId || null,
       p_season_id: isMusic ? null : draft.seasonId || null,
       p_hymn_id: draft.mode === 'learning_lesson_set' ? draft.hymnId || null : null,
