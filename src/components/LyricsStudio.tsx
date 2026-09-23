@@ -136,12 +136,12 @@ export function LyricsStudio() {
   const dirtyRevision = useRef(0);
   const knownLocales = useRef<Set<LocaleCode>>(new Set());
   const draftSnapshot = useRef<{
-    trackId: string | null;
+    track: LyricEditorTrack | null;
     locales: LocaleCode[];
     rows: EditableMultilingualLyricRow[];
     descriptions: Record<string, string>;
     dirty: boolean;
-  }>({ trackId: null, locales: [], rows: [], descriptions: {}, dirty: false });
+  }>({ track: null, locales: [], rows: [], descriptions: {}, dirty: false });
 
   const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
   const audioUrl = selectedTrack ? resolveTrackAudio(selectedTrack) : null;
@@ -186,7 +186,7 @@ export function LyricsStudio() {
   }, []);
 
   useEffect(() => {
-    if (!trackId) return;
+    if (!selectedTrack) return;
     let cancelled = false;
 
     setDraftLoading(true);
@@ -195,7 +195,7 @@ export function LyricsStudio() {
 
     Promise.all(LOCALES.map(async (item) => ({
       locale: item.value,
-      draft: await loadLyricDraft(trackId, item.value),
+      draft: await loadLyricDraft(selectedTrack, item.value),
     })))
       .then((results) => {
         if (cancelled) return;
@@ -233,7 +233,7 @@ export function LyricsStudio() {
       });
 
     return () => { cancelled = true; };
-  }, [trackId]);
+  }, [selectedTrack]);
 
   function currentDraftLocales(): LocaleCode[] {
     const locales = new Set<LocaleCode>([
@@ -248,13 +248,13 @@ export function LyricsStudio() {
 
   useEffect(() => {
     draftSnapshot.current = {
-      trackId,
+      track: selectedTrack,
       locales: currentDraftLocales(),
       rows,
       descriptions,
       dirty,
     };
-  }, [descriptions, dirty, languageStates, rows, selectedLocales, trackId]);
+  }, [descriptions, dirty, languageStates, rows, selectedLocales, selectedTrack]);
 
   useEffect(() => {
     if (!dirty || !trackId || draftLoading) return;
@@ -270,9 +270,10 @@ export function LyricsStudio() {
   useEffect(() => {
     const flushCurrentSnapshot = () => {
       const snapshot = draftSnapshot.current;
-      if (!snapshot.dirty || !snapshot.trackId || !snapshot.locales.length) return;
+      if (!snapshot.dirty || !snapshot.track || !snapshot.locales.length) return;
       void saveLyricStudioDraft({
-        trackId: snapshot.trackId,
+        track: snapshot.track,
+        syncPrecision: snapshot.track.maxSyncPrecision,
         languages: snapshot.locales.map((locale) => ({
           locale,
           description: snapshot.descriptions[locale]?.trim() || null,
@@ -383,7 +384,7 @@ export function LyricsStudio() {
   }
 
   async function saveDraft(silent = false): Promise<boolean> {
-    if (!trackId) return true;
+    if (!selectedTrack) return true;
     const locales = currentDraftLocales();
     if (!locales.length) return true;
     const revision = dirtyRevision.current;
@@ -395,7 +396,8 @@ export function LyricsStudio() {
 
     try {
       const payload = await saveLyricStudioDraft({
-        trackId,
+        track: selectedTrack,
+        syncPrecision: selectedTrack.maxSyncPrecision,
         languages: locales.map((locale) => ({
           locale,
           description: descriptions[locale]?.trim() || null,
@@ -435,7 +437,7 @@ export function LyricsStudio() {
   }
 
   async function publishLyrics() {
-    if (!trackId) return;
+    if (!selectedTrack) return;
     const localesToPublish = currentDraftLocales();
     if (!localesToPublish.length) return;
 
@@ -444,7 +446,7 @@ export function LyricsStudio() {
       return;
     }
 
-    if (rows.some((row) => row.startMs === null)) {
+    if (selectedTrack.maxSyncPrecision === 'line' && rows.some((row) => row.startMs === null)) {
       setMessage({ tone: 'error', text: 'Set a synchronized start time for every line before publishing.' });
       return;
     }
@@ -455,7 +457,7 @@ export function LyricsStudio() {
       const saved = await saveDraft(true);
       if (!saved) return;
 
-      await publishLyricLanguages(trackId, localesToPublish);
+      await publishLyricLanguages(selectedTrack, localesToPublish, selectedTrack.maxSyncPrecision);
       setLanguageStates((current) => {
         const next = { ...current };
         localesToPublish.forEach((locale) => { next[locale] = 'published'; });

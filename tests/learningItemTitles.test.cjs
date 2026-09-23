@@ -56,24 +56,33 @@ test('never reshuffle unnumbered or ambiguous single-number selections', () => {
   assert.deepEqual(sortMediaByFilenameOrder(picked), picked);
 });
 
-test('editing learning title fields and manual ordering preserve the user choices', () => {
+test('music and learning recordings have editable titles; lesson sets keep automatic numbering', () => {
   const form = read('src/app/submission/new.tsx');
   const editor = read('src/components/TrackMetadataEditor.tsx');
   const draft = read('src/context/WorkspaceContext.tsx');
   assert.match(form, /<TrackMetadataEditor[\s\S]*?showCredits=\{isMusic\}/);
-  assert.match(form, /kind=\{isMusic \? 'track' : draft\.mode === 'learning_album' \? 'recording' : 'lesson'\}/);
+  assert.match(form, /kind=\{isMusic \? 'track' : 'recording'\}/);
+  assert.match(form, /draft\.mode !== 'learning_lesson_set' && \(\s*<TrackMetadataEditor/);
+  assert.match(form, /isLesson=\{draft\.mode === 'learning_lesson_set'\}/);
+  assert.match(form, /isLesson\s*\?\s*[^\n]*Lesson [^\n]*index \+ 1/);
   assert.match(form, /draft\.media\.forEach\(\(file, index\) =>/);
-  assert.match(form, /!hasMusicTitle\(file\.localizedTitle\)/);
+  assert.match(form, /draft\.mode !== 'learning_lesson_set' && !hasMusicTitle\(file\.localizedTitle\)/);
   assert.match(form, /current\.mediaOrderManuallySet[\s\S]*?sortMediaByFilenameOrder/);
   assert.match(form, /mediaOrderManuallySet: true/);
   assert.match(editor, /kind === 'track' \? 'Track' : kind === 'recording' \? 'Recording' : 'Lesson'/);
   assert.match(editor, /\{showCredits && \(/);
   assert.match(draft, /mediaOrderManuallySet: false/);
+  const uploads = read('src/utils/uploads.ts');
+  assert.match(uploads, /input\.kind === 'image' \|\| input\.kind === 'lesson'/);
 });
 
-test('every uploaded learning item sends the chosen title and localized fields', () => {
+test('lesson submissions use Lesson 1, Lesson 2, etc. in current order without custom titles', () => {
   const service = read('src/services/creatorService.ts');
-  assert.match(service, /title: preferredLocalizedTitle\(file\.localizedTitle\)/);
-  assert.match(service, /localizedTitles: file\.localizedTitle \?\? \{\}/);
+  const form = read('src/app/submission/new.tsx');
+  assert.match(service, /draft\.media\.map\(\(file, index\) => \(\{/);
+  assert.match(service, /title: draft\.mode === 'learning_lesson_set'\s*\?\s*[^\n]*Lesson [^\n]*index \+ 1/);
+  assert.match(service, /localizedTitles: draft\.mode === 'learning_lesson_set' \? \{\} : \(file\.localizedTitle \?\? \{\}\)/);
+  assert.match(service, /preferredLocalizedTitle\(file\.localizedTitle\)/);
+  assert.match(form, /draft\.mode === 'learning_lesson_set'\s*\?\s*[^\n]*Lesson [^\n]*index \+ 1/);
   assert.doesNotMatch(service, /title: isMusic \? preferredLocalizedTitle\(file\.localizedTitle\) : file\.name/);
 });

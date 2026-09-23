@@ -32,7 +32,7 @@ function freshCandidate(input: {
   sourceFile?: any;
 }): UploadCandidate {
   const fallback: MediaKind = input.kind === 'image' ? 'image' : input.kind === 'audio' ? 'audio' : 'video';
-  const guessedTitles = input.kind === 'image'
+  const guessedTitles = input.kind === 'image' || input.kind === 'lesson'
     ? { en: '', ar: '', cop: '', fr: '' }
     : guessLocalizedTitlesFromFilename(input.name);
   return {

@@ -138,9 +138,10 @@ function LearningHymnPicker({ accountId, options, value, onChange }: {
   );
 }
 
-function FileRow({ file, index, previewing, onPreview, onRetry, onRemove, dragHandle }: {
+function FileRow({ file, index, isLesson = false, previewing, onPreview, onRetry, onRemove, dragHandle }: {
   file: UploadCandidate;
   index?: number;
+  isLesson?: boolean;
   previewing: boolean;
   onPreview: () => void;
   onRetry: () => void;
@@ -156,7 +157,9 @@ function FileRow({ file, index, previewing, onPreview, onRetry, onRemove, dragHa
           <Text style={uiStyles.rowTitle} numberOfLines={1}>
             {index === undefined
               ? `Artwork: ${file.name}`
-              : `${index + 1}. ${preferredLocalizedTitle(file.localizedTitle) || file.title || 'Untitled'}`}
+              : isLesson
+                ? `Lesson ${index + 1}`
+                : `${index + 1}. ${preferredLocalizedTitle(file.localizedTitle) || file.title || 'Untitled'}`}
           </Text>
           {index !== undefined && <Text style={uiStyles.muted} numberOfLines={1}>{file.name}</Text>}
           <Text style={statusStyle}>{fileSize(file.size)} • {uploadLabel(file)}</Text>
@@ -566,18 +569,14 @@ export default function NewSubmission() {
               <FileRow
                 file={file}
                 index={index}
+                isLesson={draft.mode === 'learning_lesson_set'}
                 previewing={previewId === file.id}
                 onPreview={() => setPreviewId(previewId === file.id ? null : file.id)}
                 onRetry={() => uploadDraftFile(file)}
                 onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
                 dragHandle={dragHandle}
               />
-              {draft.mode === 'learning_lesson_set' ? (
-                <View style={styles.lessonIdentity}>
-                  <Text style={styles.lessonIdentityTitle}>Lesson {index + 1}</Text>
-                  <Text style={uiStyles.muted}>The order defines the lesson number. Individual lesson titles are not needed.</Text>
-                </View>
-              ) : (
+              {draft.mode !== 'learning_lesson_set' && (
                 <TrackMetadataEditor
                   value={file}
                   index={index}
@@ -656,8 +655,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.surfaceSoft,
   },
-  lessonIdentity: { gap: 4, paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
-  lessonIdentityTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.body, fontSize: 16, fontWeight: '800' },
   fileActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: COLORS.border, overflow: 'hidden', marginTop: 4 },
   progressFill: { height: 4, backgroundColor: COLORS.gold },
