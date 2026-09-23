@@ -764,7 +764,7 @@ export function LyricsStudio() {
                               const file = event.currentTarget.files?.[0];
                               event.currentTarget.value = '';
                               if (file) {
-                                if (!/\\.(lrc|txt)$/i.test(file.name)) {
+                                if (!/\.(lrc|txt)$/i.test(file.name)) {
                                   setMessage({ tone: 'error', text: 'Choose an LRC or TXT lyrics file.' });
                                 } else {
                                   void importLrc(locale, file);
