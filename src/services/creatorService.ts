@@ -13,6 +13,7 @@ import type {
   CreatorRelease,
   CreatorReleaseSummary,
   CreditOptions,
+  ContributorSuggestion,
   SubmissionItem,
   SubmissionItemRole,
   TrackContributor,
@@ -301,6 +302,15 @@ export const creatorService = {
     return rpc<CatalogOptions>('get_creator_catalog_options');
   },
 
+  searchContributors(accountId: string, query: string, kind: 'artist' | 'cantor' | 'all' = 'artist'): Promise<ContributorSuggestion[]> {
+    return rpc<ContributorSuggestion[]>('search_creator_contributors', {
+      p_creator_account_id: accountId,
+      p_query: query,
+      p_kind: kind,
+      p_limit: 12,
+    });
+  },
+
   createArtist(accountId: string, displayName: string): Promise<CatalogOption> {
     return rpc<CatalogOption>('create_creator_artist', { p_creator_account_id: accountId, p_display_name: displayName });
   },
@@ -329,10 +339,12 @@ export const creatorService = {
         title: isMusic ? preferredLocalizedTitle(file.localizedTitle) : file.name,
         role: 'media',
         localizedTitles: isMusic ? (file.localizedTitle ?? {}) : {},
-        // Names are resolved to reusable catalogue artists by the backend.
+        // Explicitly selected profiles stay linked by UUID. Otherwise an
+        // exact normalized name reuses a credit; a new name creates one.
         mainArtistName: isMusic ? (file.mainArtistName?.trim() || null) : null,
+        mainArtistId: isMusic ? (file.mainArtistId || null) : null,
         contributors: isMusic
-          ? (file.contributors ?? []).map((credit) => ({ name: credit.name.trim(), role: credit.role }))
+          ? (file.contributors ?? []).map((credit) => ({ name: credit.name.trim(), role: credit.role, artistId: credit.artistId || null }))
           : [],
       })),
     ];
@@ -350,9 +362,9 @@ export const creatorService = {
       p_hymn_id: draft.mode === 'learning_lesson_set' ? draft.hymnId || null : null,
       p_localized_titles: draft.localizedTitle,
       p_items: items,
-      p_release_timing_mode: isMusic ? draft.releaseTimingMode : 'asap',
-      p_scheduled_release_at: isMusic && draft.releaseTimingMode === 'scheduled' ? toIsoOrNull(draft.scheduledReleaseAt) : null,
-      p_original_release_date: isMusic ? nullIfBlank(draft.originalReleaseDate) : null,
+      p_release_timing_mode: draft.releaseTimingMode,
+      p_scheduled_release_at: draft.releaseTimingMode === 'scheduled' ? toIsoOrNull(draft.scheduledReleaseAt) : null,
+      p_original_release_date: nullIfBlank(draft.originalReleaseDate),
     });
   },
 
@@ -451,6 +463,7 @@ export const creatorService = {
       title?: string;
       localizedTitle?: LocalizedMetadata;
       mainArtistName?: string;
+      mainArtistId?: string;
       contributors?: TrackContributor[];
     }[] | null;
     coverUploadIntentId?: string | null;
@@ -472,6 +485,7 @@ export const creatorService = {
         title: track.title,
         localizedTitles: track.localizedTitle ?? {},
         mainArtistName: track.mainArtistName ?? '',
+        mainArtistId: track.mainArtistId ?? null,
         contributors: track.contributors ?? [],
       })) ?? null,
       p_cover_upload_intent_id: patch.coverUploadIntentId ?? null,
