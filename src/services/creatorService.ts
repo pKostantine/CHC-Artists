@@ -323,6 +323,13 @@ export const creatorService = {
     });
   },
 
+  createHymn(accountId: string, title: string): Promise<CatalogOption> {
+    return rpc<CatalogOption>('create_creator_hymn', {
+      p_creator_account_id: accountId,
+      p_title: title,
+    });
+  },
+
   items(submissionId: string): Promise<SubmissionItem[]> {
     return rpc<SubmissionItem[]>('get_creator_submission_items', { p_submission_id: submissionId });
   },
