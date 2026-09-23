@@ -4,13 +4,14 @@ const fs = require('node:fs');
 
 const read = (name) => fs.readFileSync(name, 'utf8');
 
-test('learning albums have cantor and chorus suggestions without a Contributor type selector', () => {
+test('learning albums and lesson sets share the music artist catalogue, without creation/type buttons', () => {
   const submission = read('src/app/submission/new.tsx');
-  assert.doesNotMatch(submission, /<Label>Contributor type<\/Label>/);
-  assert.match(submission, /allowChorus=\{draft\.mode === 'learning_album'\}/);
-  assert.match(submission, /<ContributorSearchField/);
-  assert.match(submission, /<Button label="Add new chorus"/);
-  assert.match(submission, /accountId=\{account\?\.id\}/);
+  assert.doesNotMatch(submission, /Contributor type|Add new cantor|Add new chorus|create\('cantor'\)|create\('chorus'\)/);
+  assert.match(submission, /kind="artist"/);
+  assert.match(submission, /label="Artist \/ Cantor \/ Chorus"/);
+  assert.match(submission, /onSelect=\{\(person\) => onSelect\(person\.id, person\.title\)\}/);
+  assert.match(submission, /selectedArtistId=\{draft\.cantorId\}/);
+  assert.match(submission, /onNameChange=\{\(learningArtistName\) => patch\(\{ learningArtistName, cantorId: '' \}\)\}/);
 });
 
 test('all three modes can link existing identities by ID and search profile photos', () => {
