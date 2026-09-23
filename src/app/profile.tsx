@@ -4,10 +4,10 @@ import { useFocusEffect } from 'expo-router';
 import { Banner, Button, Card, Field, Label, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
+import { FileSelectButton } from '@/components/FileSelectButton';
 import { creatorService } from '@/services/creatorService';
 import { resolveImageUrl } from '@/services/mediaService';
-import type { ArtistProfile, ArtistSocialLink } from '@/types/creator';
-import { pickUploadCandidates } from '@/utils/uploads';
+import type { ArtistProfile, ArtistSocialLink, UploadCandidate } from '@/types/creator';
 
 const PLATFORMS = [
   { id: 'website', label: 'Website', placeholder: 'https://yourwebsite.com' },
@@ -247,11 +247,8 @@ export default function ArtistProfileScreen() {
     }
   }
 
-  async function changePicture() {
-    if (!account) return;
-    const picked = await pickUploadCandidates('image', false);
-    if (!picked.length) return;
-
+  async function changePicture(picked: UploadCandidate[]) {
+    if (!account || !picked.length) return;
     const picture = picked[0];
     setUploadingImage(true);
     setPictureProgress(0);
@@ -334,10 +331,12 @@ export default function ArtistProfileScreen() {
               : <Text style={styles.avatarFallback}>{profile.displayName.slice(0, 1).toUpperCase()}</Text>}
           </View>
           <View style={styles.pictureBody}>
-            <Button
+            <FileSelectButton
               label={uploadingImage ? `Uploading ${Math.round(pictureProgress * 100)}%` : profile.profileImage ? 'Replace picture' : 'Choose picture'}
+              kind="image"
               busy={uploadingImage}
-              onPress={() => void changePicture()}
+              onFiles={(picked) => void changePicture(picked)}
+              onError={setError}
             />
             {!!profile.profileImagePending && (
               <Text style={uiStyles.muted}>Your new picture is being processed. This preview will update automatically.</Text>
