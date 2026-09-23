@@ -67,9 +67,13 @@ export function guessLocalizedTitlesFromFilename(filename: string): LocalizedMet
   const latinSide = arabicIndex >= 0 ? base.slice(0, arabicIndex) : base;
   const arabicSide = arabicIndex >= 0 ? base.slice(arabicIndex) : '';
 
+  const english = titleSegment(latinSide);
+  const arabic = titleSegment(arabicSide);
   return {
-    en: titleSegment(latinSide),
-    ar: titleSegment(arabicSide),
+    // A bare number ("01.m4a") is an ordering hint, not a recording title.
+    // Leave it empty so the artist must supply a meaningful title.
+    en: /^\d+$/.test(english) ? '' : english,
+    ar: /^\d+$/.test(arabic) ? '' : arabic,
     cop: '',
     fr: '',
   };
