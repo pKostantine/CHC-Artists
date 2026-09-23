@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Field, Label, Segmented, uiStyles } from '@/components/ui';
+import { ContributorSearchField } from '@/components/ContributorSearchField';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import type { LocalizedMetadata, TrackContributor, TrackContributorRole } from '@/types/creator';
 import { MUSIC_TITLE_LOCALES, preferredLocalizedTitle } from '@/utils/titles';
@@ -9,6 +10,7 @@ export interface EditableTrackMetadata {
   title?: string;
   localizedTitle?: LocalizedMetadata;
   mainArtistName?: string;
+  mainArtistId?: string;
   contributors?: TrackContributor[];
 }
 
@@ -24,11 +26,13 @@ const CONTRIBUTOR_ROLES: { id: TrackContributorRole; title: string }[] = [
 export function TrackCreditsEditor({
   value,
   identityName,
+  accountId,
   onChange,
   onCopyToAll,
 }: {
   value: EditableTrackMetadata;
   identityName: string;
+  accountId: string | undefined;
   onChange: (change: Partial<EditableTrackMetadata>) => void;
   onCopyToAll?: () => void;
 }) {
@@ -45,7 +49,7 @@ export function TrackCreditsEditor({
     });
   }
 
-  function updateContributor(id: string, change: { name?: string; role?: TrackContributorRole }) {
+  function updateContributor(id: string, change: Partial<TrackContributor>) {
     onChange({
       contributors: contributors.map((credit) => (
         credit.id === id ? { ...credit, ...change } : credit
@@ -65,14 +69,18 @@ export function TrackCreditsEditor({
 
       {open && (
         <View style={styles.creditsBody}>
-          <Field
+          <ContributorSearchField
+            accountId={accountId}
+            kind="artist"
             label="Main artist"
             value={value.mainArtistName ?? ''}
-            onChangeText={(mainArtistName) => onChange({ mainArtistName })}
+            selectedId={value.mainArtistId}
+            onTextChange={(mainArtistName) => onChange({ mainArtistName, mainArtistId: undefined })}
+            onSelect={(person) => onChange({ mainArtistName: person.title, mainArtistId: person.id })}
             placeholder={identityName || 'Artist name'}
             hint={identityName
-              ? `Leave blank to use ${identityName}. Or type any artist name for this track.`
-              : 'Type the main artist name for this track.'}
+              ? `Leave blank to use ${identityName}. Choose an existing CHC profile when available.`
+              : 'Search CHC artists or enter a new name.'}
           />
 
           <View style={styles.group}>
@@ -83,11 +91,15 @@ export function TrackCreditsEditor({
 
             {contributors.map((credit, index) => (
               <View key={credit.id} style={styles.contributor}>
-                <Field
+                <ContributorSearchField
+                  accountId={accountId}
+                  kind="artist"
                   label={`Contributor ${index + 1}`}
                   value={credit.name}
-                  onChangeText={(name) => updateContributor(credit.id, { name })}
-                  placeholder="Type a name"
+                  selectedId={credit.artistId}
+                  onTextChange={(name) => updateContributor(credit.id, { name, artistId: undefined })}
+                  onSelect={(person) => updateContributor(credit.id, { name: person.title, artistId: person.id })}
+                  placeholder="Search artist or enter a new name"
                 />
                 <View style={styles.group}>
                   <Label>Role</Label>
@@ -126,6 +138,7 @@ export function TrackMetadataEditor({
   index,
   total,
   identityName,
+  accountId,
   onChange,
   onCopyCreditsToAll,
 }: {
@@ -133,6 +146,7 @@ export function TrackMetadataEditor({
   index: number;
   total: number;
   identityName: string;
+  accountId: string | undefined;
   onChange: (change: Partial<EditableTrackMetadata>) => void;
   onCopyCreditsToAll?: () => void;
 }) {
@@ -165,6 +179,7 @@ export function TrackMetadataEditor({
       <TrackCreditsEditor
         value={value}
         identityName={identityName}
+        accountId={accountId}
         onChange={onChange}
         onCopyToAll={index === 0 && total > 1 ? onCopyCreditsToAll : undefined}
       />
