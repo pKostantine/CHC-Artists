@@ -95,7 +95,7 @@ function validMediaType(value?: string | null): value is string {
 function contentTypeFor(file: UploadCandidate, blob: Blob): string {
   // iOS Safari can report audio-only M4A files as video/mp4; preserve the
   // audio category declared by the recognizable recording extension.
-  if (/\\.m4a$/i.test(file.name)) return 'audio/mp4';
+  if (/\.m4a$/i.test(file.name)) return 'audio/mp4';
   if (validMediaType(blob.type)) return blob.type.toLowerCase();
   if (validMediaType(file.mimeType)) return file.mimeType.toLowerCase();
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
