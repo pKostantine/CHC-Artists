@@ -41,7 +41,12 @@ export default function SubmissionsDashboardScreen() {
       />
 
       {!!error && (
-        <Banner tone="error">{error}</Banner>
+        <View style={{ gap: SPACING.sm }}>
+          <Banner tone="error">{error}</Banner>
+          <View style={uiStyles.actions}>
+            <Button kind="secondary" label="Retry loading submissions" onPress={() => void refresh()} />
+          </View>
+        </View>
       )}
 
       {needsAction.length > 0 && (
