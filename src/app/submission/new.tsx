@@ -16,7 +16,7 @@ import type { CatalogOption, CreatorDraft, CreditOptions, SubmissionMode, Upload
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { droppedUploadCandidates, uploadsBlocking } from '@/utils/uploads';
-import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
+import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle, releaseTypeForTrackCount, sortMediaByFilenameOrder } from '@/utils/titles';
 
 const MODES: { id: SubmissionMode; title: string }[] = [
   { id: 'music', title: 'Music release' },
@@ -26,8 +26,8 @@ const MODES: { id: SubmissionMode; title: string }[] = [
 
 const MODE_HELP: Record<SubmissionMode, string> = {
   music: 'Enter the release title, choose the release details, then add audio. Track titles are guessed from filenames and remain editable. CHC determines Single, EP, or Album automatically.',
-  learning_album: 'Enter the album title first, then choose a cantor or chorus and add the recordings.',
-  learning_lesson_set: 'Enter the lesson set title first, then choose a cantor and add the lessons.',
+  learning_album: 'Enter the album title, choose a cantor or chorus, and add the recordings. Each recording gets its own editable multilingual title and a suggested order from its filename.',
+  learning_lesson_set: 'Enter the lesson set title, choose a cantor, and add the lessons. Each lesson gets its own editable multilingual title and a suggested order from its filename.',
 };
 
 const MUSIC_TYPE_OPTIONS = [
@@ -252,14 +252,15 @@ export default function NewSubmission() {
   }
   if (draft.mode === 'learning_lesson_set' && !draft.hymnId) problems.push('Choose the hymn these lessons teach.');
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
-  if (isMusic) {
-    draft.media.forEach((file, index) => {
-      if (!hasMusicTitle(file.localizedTitle)) problems.push(`Add a title in at least one language for track ${index + 1}.`);
-      if ((file.contributors ?? []).some((credit) => !credit.name.trim())) {
-        problems.push(`Fill in or remove the unnamed contributor on track ${index + 1}.`);
-      }
-    });
-  }
+  draft.media.forEach((file, index) => {
+    const itemKind = isMusic ? 'track' : draft.mode === 'learning_album' ? 'recording' : 'lesson';
+    if (!hasMusicTitle(file.localizedTitle)) {
+      problems.push(`Add a title in at least one language for ${itemKind} ${index + 1}.`);
+    }
+    if (isMusic && (file.contributors ?? []).some((credit) => !credit.name.trim())) {
+      problems.push(`Fill in or remove the unnamed contributor on track ${index + 1}.`);
+    }
+  });
   if (draft.mode !== 'learning_lesson_set' && draft.media.some((f) => f.mediaType !== 'audio')) {
     problems.push('Only audio files can be added here. Remove the video files, or switch to Lesson set.');
   }
@@ -271,7 +272,9 @@ export default function NewSubmission() {
     setSubmitError('');
     setDraft((current) => ({
       ...current,
-      media: [...current.media, ...picked],
+      media: current.mediaOrderManuallySet
+        ? [...current.media, ...picked]
+        : sortMediaByFilenameOrder([...current.media, ...picked]),
       releaseType: releaseTypeForTrackCount(current.media.length + picked.length),
     }));
     picked.forEach(uploadDraftFile);
@@ -328,7 +331,7 @@ export default function NewSubmission() {
       const media = [...current.media];
       const [moved] = media.splice(fromIndex, 1);
       media.splice(toIndex, 0, moved);
-      return { ...current, media };
+      return { ...current, media, mediaOrderManuallySet: true };
     });
   }
 
@@ -599,20 +602,20 @@ export default function NewSubmission() {
                 onRemove={() => setDraft((current) => ({ ...current, media: current.media.filter((x) => x.id !== file.id) }))}
                 dragHandle={dragHandle}
               />
-              {isMusic && (
-                <TrackMetadataEditor
-                  value={file}
-                  index={index}
-                  total={draft.media.length}
-                  identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
-                   accountId={account?.id}
-                  onCopyCreditsToAll={() => copyCreditsToAll(file.id)}
-                  onChange={(change) => setDraft((current) => ({
-                    ...current,
-                    media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
-                  }))}
-                />
-              )}
+              <TrackMetadataEditor
+                value={file}
+                index={index}
+                total={draft.media.length}
+                kind={isMusic ? 'track' : draft.mode === 'learning_album' ? 'recording' : 'lesson'}
+                showCredits={isMusic}
+                identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
+                accountId={account?.id}
+                onCopyCreditsToAll={isMusic ? () => copyCreditsToAll(file.id) : undefined}
+                onChange={(change) => setDraft((current) => ({
+                  ...current,
+                  media: current.media.map((x) => (x.id === file.id ? { ...x, ...change } : x)),
+                }))}
+              />
             </View>
           )}
         />
