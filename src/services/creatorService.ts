@@ -349,16 +349,18 @@ export const creatorService = {
       ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
       ...draft.media.map((file, index) => ({
         uploadIntentId: file.uploadIntentId,
-        title: preferredLocalizedTitle(file.localizedTitle)
-          || file.title?.trim()
-          || file.name.replace(/\.[^./]+$/, ''),
+        title: draft.mode === 'learning_lesson_set'
+          ? `Lesson ${index + 1}`
+          : preferredLocalizedTitle(file.localizedTitle)
+            || file.title?.trim()
+            || file.name.replace(/\.[^./]+$/, ''),
         role: 'media',
         // The database resolves this name against the canonical artist
         // catalogue when an existing profile ID was not selected.
         learningArtistName: isMusic ? null : (draft.learningArtistName.trim() || null),
         // Recording and lesson titles are independent of their parent title.
         // Preserve each language through processing and scheduled publishing.
-        localizedTitles: file.localizedTitle ?? {},
+        localizedTitles: draft.mode === 'learning_lesson_set' ? {} : (file.localizedTitle ?? {}),
         // Explicitly selected profiles stay linked by UUID. Otherwise an
         // exact normalized name reuses a credit; a new name creates one.
         mainArtistName: isMusic ? (file.mainArtistName?.trim() || null) : null,
