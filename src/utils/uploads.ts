@@ -11,11 +11,14 @@ const PICKER_TYPES: Record<'audio' | 'video' | 'image' | 'lesson', string[]> = {
 };
 
 function kindFor(mimeType: string, name: string, fallback: MediaKind): MediaKind {
+  // iOS Files sometimes calls M4A audio video/mp4. Recognize known
+  // extensions first so choosing a recording never creates a video upload.
+  if (/\\.(mp3|m4a|wav|flac|aac|ogg)$/i.test(name)) return 'audio';
+  if (/\\.(mp4|mov|m4v)$/i.test(name)) return 'video';
+  if (/\\.(jpe?g|png|webp|gif|heic|heif)$/i.test(name)) return 'image';
   if (mimeType.startsWith('video/')) return 'video';
   if (mimeType.startsWith('audio/')) return 'audio';
   if (mimeType.startsWith('image/')) return 'image';
-  if (/\.(mp4|mov|m4v)$/i.test(name)) return 'video';
-  if (/\.(mp3|m4a|wav|flac|aac|ogg)$/i.test(name)) return 'audio';
   return fallback;
 }
 
