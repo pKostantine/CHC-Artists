@@ -48,6 +48,7 @@ export function fileSize(bytes: number): string {
 }
 
 export function uploadLabel(file: UploadCandidate): string {
+  if (file.error && file.uploadIntentId) return 'Uploaded — processing retry needed';
   if (file.error) return 'Upload failed';
   if (file.uploaded && file.uploadIntentId) return 'Uploaded';
   if (file.uploading) return `Uploading ${Math.max(1, Math.round(file.progress * 100))}%`;

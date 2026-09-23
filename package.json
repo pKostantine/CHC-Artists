@@ -13,10 +13,11 @@
     "typecheck": "tsc --noEmit",
     "test:submissions": "node --test tests/submissionIdentity.test.cjs",
     "test:mobile-files": "node --test tests/mobileFilePickers.test.cjs",
-    "test": "npm run test:submissions && npm run test:mobile-files && npm run test:learning-titles && npm run test:artist-search && npm run test:upload-auth",
+    "test": "npm run test:submissions && npm run test:mobile-files && npm run test:learning-titles && npm run test:artist-search && npm run test:upload-auth && npm run test:upload-recovery",
     "test:learning-titles": "node --test tests/learningItemTitles.test.cjs",
     "test:artist-search": "node --test tests/unifiedArtistSearch.test.cjs",
-    "test:upload-auth": "node --test tests/uploadAuth.test.cjs"
+    "test:upload-auth": "node --test tests/uploadAuth.test.cjs",
+    "test:upload-recovery": "node --test tests/uploadRecovery.test.cjs"
   },
   "dependencies": {
     "@expo/ui": "57.0.18",
