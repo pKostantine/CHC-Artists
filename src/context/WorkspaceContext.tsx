@@ -26,6 +26,7 @@ export const emptyDraft = (): CreatorDraft => ({
   recordingType: '',
   artistId: '',
   cantorId: '',
+  learningArtistName: '',
   seasonId: '',
   hymnId: '',
   localizedTitle: { en: '', ar: '', cop: '', fr: '' },
