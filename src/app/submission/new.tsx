@@ -655,8 +655,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.surfaceSoft,
   },
-  lessonIdentity: { gap: 4, paddingHorizontal: SPACING.md, paddingBottom: SPACING.md },
-  lessonIdentityTitle: { color: COLORS.white, fontFamily: TYPOGRAPHY.body, fontSize: 16, fontWeight: '800' },
   fileActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   progressTrack: { height: 4, borderRadius: 2, backgroundColor: COLORS.border, overflow: 'hidden', marginTop: 4 },
   progressFill: { height: 4, backgroundColor: COLORS.gold },
