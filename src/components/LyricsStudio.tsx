@@ -2,6 +2,7 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppState,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -473,10 +474,10 @@ export function LyricsStudio() {
     }
   }
 
-  async function importLrc(locale: LocaleCode) {
+  async function importLrc(locale: LocaleCode, pickedFile?: File) {
     try {
       markLocaleTouched(locale);
-      const contents = await importLrcFile();
+      const contents = pickedFile ? await pickedFile.text() : await importLrcFile();
       if (contents === null) return;
       const parsed = createLyricLinesFromText(
         contents
@@ -744,12 +745,49 @@ export function LyricsStudio() {
                       {isPublished && <Text style={styles.publishedSmall}>Published · editable</Text>}
                     </View>
                     <View style={styles.inlineButtons}>
-                      <Pressable
-                        style={styles.miniButton}
-                        onPress={() => void importLrc(locale)}
-                      >
-                        <Text style={styles.miniButtonText}>Import LRC</Text>
-                      </Pressable>
+                      {Platform.OS === 'web' ? (
+                        <label style={{
+                          position: 'relative',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          border: `1px solid ${COLORS.border}`,
+                          borderRadius: RADII.sm,
+                          padding: '6px 8px',
+                          overflow: 'hidden',
+                        }}>
+                          <Text style={styles.miniButtonText}>Import LRC</Text>
+                          <input
+                            type="file"
+                            aria-label={`Import ${locale} LRC file`}
+                            onChange={(event) => {
+                              const file = event.currentTarget.files?.[0];
+                              event.currentTarget.value = '';
+                              if (file) {
+                                if (!/\\.(lrc|txt)$/i.test(file.name)) {
+                                  setMessage({ tone: 'error', text: 'Choose an LRC or TXT lyrics file.' });
+                                } else {
+                                  void importLrc(locale, file);
+                                }
+                              }
+                            }}
+                            style={{
+                              display: 'block',
+                              position: 'absolute',
+                              inset: 0,
+                              opacity: 0,
+                              width: '100%',
+                              height: '100%',
+                              cursor: 'pointer',
+                              fontSize: 16,
+                            }}
+                          />
+                        </label>
+                      ) : (
+                        <Pressable style={styles.miniButton} onPress={() => void importLrc(locale)}>
+                          <Text style={styles.miniButtonText}>Import LRC</Text>
+                        </Pressable>
+                      )}
                       <Pressable
                         style={[styles.miniButton, !rows.length && styles.disabledButton]}
                         disabled={!rows.length}
