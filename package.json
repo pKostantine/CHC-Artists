@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "build": "expo export -p web",
     "deploy": "npm run build && wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:submissions": "node --test tests/submissionIdentity.test.cjs"
   },
   "dependencies": {
     "@expo/ui": "57.0.18",
