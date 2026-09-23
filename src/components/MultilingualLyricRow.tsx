@@ -18,6 +18,7 @@ export function MultilingualLyricRow({
   languages,
   dragHandle,
   dragging,
+  timingEnabled = true,
   onTextChange,
   onStartChange,
   onMark,
@@ -30,6 +31,7 @@ export function MultilingualLyricRow({
   languages: LyricRowLanguage[];
   dragHandle: ReactNode;
   dragging: boolean;
+  timingEnabled?: boolean;
   onTextChange: (locale: LocaleCode, text: string) => void;
   onStartChange: (startMs: number | null) => void;
   onMark: () => void;
@@ -48,6 +50,7 @@ export function MultilingualLyricRow({
 
       <View style={styles.controls}>
         <Text style={styles.sequence}>{sequence}</Text>
+        {timingEnabled ? <>
         <Pressable
           accessibilityRole="button"
           disabled={row.startMs === null || dragging}
@@ -77,6 +80,7 @@ export function MultilingualLyricRow({
         >
           <Text style={styles.markText}>Set time</Text>
         </Pressable>
+        </> : null}
       </View>
 
       <View style={styles.languageGrid}>

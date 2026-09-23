@@ -85,7 +85,11 @@ export async function saveLyricStudioDraft(input: {
       })),
     }));
   const request = input.track.targetType === 'music_track'
-    ? supabase.rpc('save_track_lyric_studio_draft', { p_track_id: input.track.id, p_languages: languages })
+    ? supabase.rpc('save_track_lyric_studio_draft_v2', {
+        p_track_id: input.track.id,
+        p_sync_precision: input.syncPrecision,
+        p_languages: languages,
+      })
     : supabase.rpc('save_learning_lyric_studio_draft', {
         p_item_kind: learningKind(input.track),
         p_item_id: input.track.id,

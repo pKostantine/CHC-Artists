@@ -21,6 +21,7 @@ import type {
   LocaleCode,
   LyricDraft,
   LyricEditorTrack,
+  LyricSyncPrecision,
 } from '@/types/lyrics';
 import { confirmAction } from '@/utils/dialogs';
 import { exportLrcFile, importLrcFile } from '@/utils/lrcFiles';
@@ -121,6 +122,7 @@ export function LyricsStudio() {
   const compact = width < 700;
   const [tracks, setTracks] = useState<LyricEditorTrack[]>([]);
   const [trackId, setTrackId] = useState<string | null>(null);
+  const [syncPrecision, setSyncPrecision] = useState<Extract<LyricSyncPrecision, 'unsynced' | 'line'>>('line');
   const [selectedLocales, setSelectedLocales] = useState<LocaleCode[]>(['en']);
   const [rows, setRows] = useState<EditableMultilingualLyricRow[]>([]);
   const [descriptions, setDescriptions] = useState<Record<string, string>>({});
@@ -137,11 +139,12 @@ export function LyricsStudio() {
   const knownLocales = useRef<Set<LocaleCode>>(new Set());
   const draftSnapshot = useRef<{
     track: LyricEditorTrack | null;
+    syncPrecision: Extract<LyricSyncPrecision, 'unsynced' | 'line'>;
     locales: LocaleCode[];
     rows: EditableMultilingualLyricRow[];
     descriptions: Record<string, string>;
     dirty: boolean;
-  }>({ track: null, locales: [], rows: [], descriptions: {}, dirty: false });
+  }>({ track: null, syncPrecision: 'line', locales: [], rows: [], descriptions: {}, dirty: false });
 
   const selectedTrack = tracks.find((track) => track.id === trackId) ?? null;
   const audioUrl = selectedTrack ? resolveTrackAudio(selectedTrack) : null;
@@ -217,6 +220,8 @@ export function LyricsStudio() {
         });
 
         knownLocales.current = new Set(existingLocales);
+        const loadedPrecision = results.find(({ draft }) => draft?.syncPrecision)?.draft?.syncPrecision;
+        setSyncPrecision(selectedTrack.maxSyncPrecision === 'unsynced' ? 'unsynced' : (loadedPrecision ?? 'line'));
         setLanguageStates(states);
         setDescriptions(nextDescriptions);
         setPasteTexts({});
@@ -249,12 +254,13 @@ export function LyricsStudio() {
   useEffect(() => {
     draftSnapshot.current = {
       track: selectedTrack,
+      syncPrecision,
       locales: currentDraftLocales(),
       rows,
       descriptions,
       dirty,
     };
-  }, [descriptions, dirty, languageStates, rows, selectedLocales, selectedTrack]);
+  }, [descriptions, dirty, languageStates, rows, selectedLocales, selectedTrack, syncPrecision]);
 
   useEffect(() => {
     if (!dirty || !trackId || draftLoading) return;
@@ -265,7 +271,7 @@ export function LyricsStudio() {
     // saveDraft intentionally reads the current render snapshot; row/description
     // changes retrigger this debounce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descriptions, dirty, draftLoading, languageStates, rows, selectedLocales, trackId]);
+  }, [descriptions, dirty, draftLoading, languageStates, rows, selectedLocales, selectedTrack, syncPrecision, trackId]);
 
   useEffect(() => {
     const flushCurrentSnapshot = () => {
@@ -273,7 +279,7 @@ export function LyricsStudio() {
       if (!snapshot.dirty || !snapshot.track || !snapshot.locales.length) return;
       void saveLyricStudioDraft({
         track: snapshot.track,
-        syncPrecision: snapshot.track.maxSyncPrecision,
+        syncPrecision: snapshot.syncPrecision,
         languages: snapshot.locales.map((locale) => ({
           locale,
           description: snapshot.descriptions[locale]?.trim() || null,
@@ -316,6 +322,15 @@ export function LyricsStudio() {
       if (!saved) return;
     }
     setTrackId(nextTrackId);
+  }
+
+  function changeSyncPrecision(next: Extract<LyricSyncPrecision, 'unsynced' | 'line'>) {
+    if (next === syncPrecision || (next === 'line' && selectedTrack?.maxSyncPrecision === 'unsynced')) return;
+    setSyncPrecision(next);
+    if (next === 'unsynced') {
+      setRows((current) => current.map((row) => ({ ...row, startMs: null, endMs: null })));
+    }
+    markDirty();
   }
 
   function toggleLocale(locale: LocaleCode) {
@@ -397,7 +412,7 @@ export function LyricsStudio() {
     try {
       const payload = await saveLyricStudioDraft({
         track: selectedTrack,
-        syncPrecision: selectedTrack.maxSyncPrecision,
+        syncPrecision,
         languages: locales.map((locale) => ({
           locale,
           description: descriptions[locale]?.trim() || null,
@@ -446,7 +461,7 @@ export function LyricsStudio() {
       return;
     }
 
-    if (selectedTrack.maxSyncPrecision === 'line' && rows.some((row) => row.startMs === null)) {
+    if (syncPrecision === 'line' && rows.some((row) => row.startMs === null)) {
       setMessage({ tone: 'error', text: 'Set a synchronized start time for every line before publishing.' });
       return;
     }
@@ -457,7 +472,7 @@ export function LyricsStudio() {
       const saved = await saveDraft(true);
       if (!saved) return;
 
-      await publishLyricLanguages(selectedTrack, localesToPublish, selectedTrack.maxSyncPrecision);
+      await publishLyricLanguages(selectedTrack, localesToPublish, syncPrecision);
       setLanguageStates((current) => {
         const next = { ...current };
         localesToPublish.forEach((locale) => { next[locale] = 'published'; });
@@ -488,7 +503,7 @@ export function LyricsStudio() {
           .join('\n'),
       );
       const timed = parseLrc(contents);
-      const imported = timed.length ? timed : parsed;
+      const imported = syncPrecision === 'line' && timed.length ? timed : parsed;
 
       if (!imported.length) {
         setMessage({ tone: 'error', text: 'That file has no lyric lines in it.' });
@@ -652,12 +667,12 @@ export function LyricsStudio() {
   if (!tracks.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
-        <PageHeader title="Lyrics Studio" subtitle="Add several lyric languages and synchronize them together on one timeline." />
+        <PageHeader title="Lyrics Studio" subtitle="Add unsynced or synchronized lyrics to music and learning content." />
         {message?.tone === 'error' ? (
           <Banner tone="error">{message.text}</Banner>
         ) : (
           <Banner tone="info">
-            No submitted music tracks are ready yet. Submit a music release first; its tracks will appear here as soon as the submission creates them.
+            No editable music tracks, learning recordings, or lessons are ready yet.
           </Banner>
         )}
       </ScrollView>
@@ -673,7 +688,7 @@ export function LyricsStudio() {
       >
         <PageHeader
           title="Lyrics Studio"
-          subtitle="Choose a track and all of its lyric languages together. Every selected language shares the same line order and timestamps."
+          subtitle="Create multilingual lyrics for music, learning albums, and lesson sets."
         />
 
         <View style={[styles.panel, compact && styles.panelCompact]}>
@@ -687,6 +702,8 @@ export function LyricsStudio() {
               >
                 <Text style={styles.trackTitle}>{track.title}</Text>
                 <Text style={styles.muted}>
+                  {track.targetType === 'music_track' ? 'Music' : track.targetType === 'learning_album_recording' ? 'Learning album' : 'Lesson set'}
+                  {' · '}{track.subtitle ?? 'CHC'}{' · '}
                   {track.publicationStatus}
                   {track.durationMs ? ` · ${(track.durationMs / 1_000).toFixed(1)}s` : ''}
                 </Text>
@@ -696,9 +713,40 @@ export function LyricsStudio() {
         </View>
 
         <View style={[styles.panel, compact && styles.panelCompact]}>
-          <Text style={styles.sectionTitle}>2. Choose your languages</Text>
+          <Text style={styles.sectionTitle}>2. Choose the lyric style</Text>
           <Text style={styles.muted}>
-            Pick every language that belongs to these lyrics. They are edited side by side and synchronized as one lyric timeline, not as separate timing packs.
+            Unsynced lyrics read as a continuous text. Synced lyrics follow playback line by line.
+          </Text>
+          <View style={styles.modeSwitch}>
+            <Pressable
+              onPress={() => changeSyncPrecision('unsynced')}
+              style={[styles.modeButton, syncPrecision === 'unsynced' && styles.modeButtonSelected]}
+            >
+              <Text style={[styles.modeButtonText, syncPrecision === 'unsynced' && styles.modeButtonTextSelected]}>Unsynced</Text>
+            </Pressable>
+            <Pressable
+              disabled={selectedTrack?.maxSyncPrecision === 'unsynced'}
+              onPress={() => changeSyncPrecision('line')}
+              style={[
+                styles.modeButton,
+                syncPrecision === 'line' && styles.modeButtonSelected,
+                selectedTrack?.maxSyncPrecision === 'unsynced' && styles.disabledButton,
+              ]}
+            >
+              <Text style={[styles.modeButtonText, syncPrecision === 'line' && styles.modeButtonTextSelected]}>Synced</Text>
+            </Pressable>
+          </View>
+          {selectedTrack?.maxSyncPrecision === 'unsynced' ? (
+            <Text style={styles.muted}>Lesson sets use unsynced lyrics because each item is an instructional lesson rather than a hymn recording.</Text>
+          ) : null}
+        </View>
+
+        <View style={[styles.panel, compact && styles.panelCompact]}>
+          <Text style={styles.sectionTitle}>3. Choose your languages</Text>
+          <Text style={styles.muted}>
+            {syncPrecision === 'line'
+              ? 'Pick every language that belongs to these lyrics. They share one synchronized timeline instead of separate timing packs.'
+              : 'Pick every language that belongs to these lyrics. They stay aligned side by side in the same reading order.'}
           </Text>
           <View style={styles.languageChips}>
             {LOCALES.map((item) => {
@@ -729,7 +777,7 @@ export function LyricsStudio() {
 
         <View style={[styles.panel, compact && styles.panelCompact]}>
           <View style={styles.sectionCopy}>
-            <Text style={styles.sectionTitle}>3. Add the lyrics</Text>
+            <Text style={styles.sectionTitle}>4. Add the lyrics</Text>
             <Text style={styles.muted}>
               Paste one row per shared lyric moment. A language can be blank on any row — for example, an English/Arabic track can alternate languages while keeping one shared timeline.
             </Text>
@@ -838,9 +886,11 @@ export function LyricsStudio() {
         <View style={[styles.syncPanel, compact && styles.panelCompact]}>
           <View style={styles.rowBetween}>
             <View style={styles.sectionCopy}>
-              <Text style={styles.sectionTitle}>4. Sync the lines</Text>
+              <Text style={styles.sectionTitle}>{syncPrecision === 'line' ? '5. Sync the lines' : '5. Arrange the lines'}</Text>
               <Text style={styles.muted}>
-                Every block is one shared timestamp across the languages. Any language may be blank on any block. Edit text directly here, add lines whenever you need them, and drag the six-dot handle to put blocks in the exact order you want.
+                {syncPrecision === 'line'
+                  ? 'Every block is one shared timestamp across the languages. Edit text directly, add lines, and drag the handle to set the exact order.'
+                  : 'Each block keeps the selected languages aligned without playback timing. Edit text directly, add lines, and drag the handle to set the exact order.'}
               </Text>
             </View>
           </View>
@@ -855,7 +905,7 @@ export function LyricsStudio() {
             <Banner tone="info">Loading the selected track’s lyric languages…</Banner>
           ) : (
             <>
-              <View style={styles.playbackCard}>
+              {syncPrecision === 'line' ? <View style={styles.playbackCard}>
                 <View style={styles.playerTop}>
                   <View style={styles.playerText}>
                     <Text style={styles.playbackTitle}>Playback</Text>
@@ -931,9 +981,11 @@ export function LyricsStudio() {
 
                 {!audioUrl && selectedTrack && <Text style={styles.error}>This track does not have a playable music asset yet.</Text>}
                 {!!status.error && <Text style={styles.error}>{status.error}</Text>}
-              </View>
+              </View> : (
+                <Banner tone="info">Unsynced mode does not require playback timing. Lyrics publish in the exact row order shown below.</Banner>
+              )}
 
-              {!!rows.length && (
+              {syncPrecision === 'line' && !!rows.length && (
                 <View style={styles.rowBetween}>
                   <Text style={styles.muted}>The gold block is the line currently playing. Drag only from the six-dot handle.</Text>
                   <Pressable
@@ -955,7 +1007,7 @@ export function LyricsStudio() {
                   <MultilingualLyricRow
                     row={row}
                     sequence={index + 1}
-                    active={index === activeIndex}
+                    active={syncPrecision === 'line' && index === activeIndex}
                     languages={selectedLocales.map((locale) => {
                       const language = LOCALES.find((item) => item.value === locale);
                       return {
@@ -967,6 +1019,7 @@ export function LyricsStudio() {
                     })}
                     dragHandle={dragHandle}
                     dragging={rowDragging}
+                    timingEnabled={syncPrecision === 'line'}
                     onTextChange={(locale, text) => replaceRowText(index, locale, text)}
                     onStartChange={(startMs) => replaceRowStart(index, startMs)}
                     onMark={() => markLine(index)}
@@ -1015,13 +1068,13 @@ export function LyricsStudio() {
         {!!rows.length && (
           <View style={[styles.previewPanel, compact && styles.panelCompact]}>
             <Text style={styles.sectionTitle}>Live multilingual preview</Text>
-            <Text style={styles.muted}>All chosen languages advance together on the same timestamp.</Text>
+            <Text style={styles.muted}>{syncPrecision === 'line' ? 'All chosen languages advance together on the same timestamp.' : 'All chosen languages appear in the shared row order.'}</Text>
             <View style={styles.preview}>
               {rows.map((row, index) => (
                 <Pressable
                   key={`preview-${row.key}`}
-                  onPress={() => row.startMs !== null && player.seekTo(row.startMs / 1_000)}
-                  style={[styles.previewRow, index === activeIndex && styles.previewRowActive]}
+                  onPress={() => syncPrecision === 'line' && row.startMs !== null && player.seekTo(row.startMs / 1_000)}
+                  style={[styles.previewRow, syncPrecision === 'line' && index === activeIndex && styles.previewRowActive]}
                 >
                   {selectedLocales.map((locale) => {
                     const language = LOCALES.find((item) => item.value === locale);
@@ -1031,7 +1084,7 @@ export function LyricsStudio() {
                         <Text
                           style={[
                             styles.previewLine,
-                            index === activeIndex && styles.previewActive,
+                            syncPrecision === 'line' && index === activeIndex && styles.previewActive,
                             language?.rtl && styles.arabic,
                             locale === 'cop' && styles.coptic,
                           ]}
@@ -1104,6 +1157,11 @@ const styles = StyleSheet.create({
   trackCardSelected: { borderColor: COLORS.gold, backgroundColor: COLORS.navy },
   trackCardCompact: { minWidth: '100%', paddingHorizontal: 0, paddingVertical: 12, borderRadius: 0, borderWidth: 0, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: 'transparent' },
   trackTitle: { color: COLORS.white, fontWeight: '800', fontSize: 15 },
+  modeSwitch: { alignSelf: 'flex-start', flexDirection: 'row', gap: 4, padding: 4, borderRadius: RADII.pill, backgroundColor: COLORS.black, borderWidth: 1, borderColor: COLORS.border },
+  modeButton: { minHeight: 40, minWidth: 116, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.md, borderRadius: RADII.pill },
+  modeButtonSelected: { backgroundColor: COLORS.gold },
+  modeButtonText: { color: COLORS.muted, fontFamily: TYPOGRAPHY.body, fontSize: 13, fontWeight: '800' },
+  modeButtonTextSelected: { color: COLORS.black },
 
   languageChips: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   languageChip: {

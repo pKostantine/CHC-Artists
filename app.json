@@ -27,16 +27,19 @@
       "output": "single",
       "favicon": "./assets/images/CHC_Artists_sm_web.png"
     },
-    "splash": {
-      "backgroundColor": "#11161B",
-      "image": "./assets/images/CHC_Artists_App.png",
-      "resizeMode": "contain"
-    },
     "plugins": [
       "expo-router",
       "expo-web-browser",
       "expo-sqlite",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#11161B",
+          "image": "./assets/images/CHC_Artists_App.png",
+          "resizeMode": "contain"
+        }
+      ]
     ]
   }
 }
