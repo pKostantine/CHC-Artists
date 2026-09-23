@@ -62,3 +62,36 @@ test('LRC lyrics import also uses a directly tappable browser file input', () =>
   assert.match(studio, /void importLrc\(locale, file\)/);
   assert.match(studio, /pickedFile \? await pickedFile\.text\(\) : await importLrcFile\(\)/);
 });
+
+test('iPhone M4A files stay audio even when Safari reports video/mp4', () => {
+  const uploads = read('src/utils/uploads.ts');
+  const kindDefinition = uploads.match(/function kindFor[\s\S]*?\n\}/)?.[0];
+  assert.ok(kindDefinition, 'kindFor must exist');
+  const kindFor = new Function(
+    kindDefinition.replace(
+      'function kindFor(mimeType: string, name: string, fallback: MediaKind): MediaKind',
+      'function kindFor(mimeType, name, fallback)',
+    ) + '\nreturn kindFor;',
+  )();
+  assert.equal(kindFor('video/mp4', 'recording.m4a', 'audio'), 'audio');
+  assert.equal(kindFor('', 'icon.heic', 'image'), 'image');
+  assert.equal(kindFor('audio/mp4', 'lesson.mp4', 'video'), 'video');
+
+  const service = read('src/services/creatorService.ts');
+  const mimeDefinition = service.match(/function contentTypeFor[\s\S]*?\n\}/)?.[0];
+  assert.ok(mimeDefinition, 'contentTypeFor must exist');
+  const contentTypeFor = new Function(
+    'validMediaType', 'MIME_BY_EXTENSION',
+    mimeDefinition.replace(
+      'function contentTypeFor(file: UploadCandidate, blob: Blob): string',
+      'function contentTypeFor(file, blob)',
+    ) + '\nreturn contentTypeFor;',
+  )(
+    (type) => /^(audio|video|image)\//.test(type),
+    { m4a: 'audio/mp4', mp4: 'video/mp4' },
+  );
+  assert.equal(
+    contentTypeFor({ name: 'recording.m4a', mimeType: 'video/mp4', mediaType: 'audio' }, { type: 'video/mp4' }),
+    'audio/mp4',
+  );
+});
