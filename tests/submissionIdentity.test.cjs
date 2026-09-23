@@ -39,6 +39,16 @@ test('learning albums and lesson sets share bilingual seasons and release-date c
   assert.match(service, /p_original_release_date: nullIfBlank\(draft\.originalReleaseDate\)/);
 });
 
+test('new lesson-set hymns can be entered when the learning hymn catalog is empty', () => {
+  const form = read('src/app/submission/new.tsx');
+  const service = read('src/services/creatorService.ts');
+  assert.match(form, /function LearningHymnPicker/);
+  assert.match(form, /No learning hymns yet/);
+  assert.match(form, /Add new hymn/);
+  assert.match(form, /creatorService\.createHymn\(accountId, newName\.trim\(\)\)/);
+  assert.match(service, /create_creator_hymn/);
+});
+
 test('credit IDs are retained when copying credits across tracks or updating releases', () => {
   const form = read('src/app/submission/new.tsx');
   const release = read('src/app/release/[id].tsx');
