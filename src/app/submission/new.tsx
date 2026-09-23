@@ -6,6 +6,7 @@ import { MediaPreview } from '@/components/MediaPreview';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
 import { ReorderableList } from '@/components/ReorderableList';
 import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
+import { ContributorSearchField } from '@/components/ContributorSearchField';
 import { Banner, Button, Card, Chips, Dropdown, Field, Label, Page, PageHeader, Segmented, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING, TYPOGRAPHY } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
@@ -52,38 +53,33 @@ const RECORDING_TYPE_VALUES: Record<string, string> = {
   instrumental: 'Instrumental',
 };
 
-function LearningContributorPicker({ allowChorus, options, value, onChange }: {
+function LearningContributorPicker({ allowChorus, options, value, onChange, accountId }: {
   allowChorus: boolean;
   options: CatalogOption[];
   value: string;
   onChange: (id: string) => void;
+  accountId: string | undefined;
 }) {
   const { addPerson } = useWorkspace();
-  const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
-  const [newKind, setNewKind] = useState<'cantor' | 'chorus'>('cantor');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const selected = options.find((option) => option.id === value);
 
-  const available = (allowChorus ? options : options.filter((option) => option.kind !== 'chorus'))
-    .map((option) => ({
-      id: option.id,
-      title: option.kind === 'chorus' ? `${option.title} (Chorus)` : option.title,
-    }));
-  const label = allowChorus ? 'Cantor / Chorus' : 'Cantor';
+  useEffect(() => {
+    if (selected) setName(selected.title);
+  }, [selected?.id, selected?.title]);
 
-  async function create() {
+  async function create(kind: 'cantor' | 'chorus') {
+    if (!name.trim()) return;
     setBusy(true);
     setError('');
     try {
-      const kind = allowChorus ? newKind : 'cantor';
-      const row = await addPerson(kind, name);
+      const row = await addPerson(kind, name.trim());
       onChange(row.id);
-      setName('');
-      setNewKind('cantor');
-      setAdding(false);
-    } catch (e) {
-      setError(creatorService.describeError(e));
+      setName(row.title);
+    } catch (cause) {
+      setError(creatorService.describeError(cause));
     } finally {
       setBusy(false);
     }
@@ -91,58 +87,27 @@ function LearningContributorPicker({ allowChorus, options, value, onChange }: {
 
   return (
     <View style={styles.group}>
-      <Label>{label}</Label>
-      <Text style={uiStyles.muted}>
-        Choose from CHC&apos;s existing list. New {allowChorus ? 'cantors or choruses' : 'cantors'} are saved to the database immediately.
-      </Text>
-      {available.length ? (
-        <Chips items={available} value={value} onChange={onChange} />
-      ) : (
-        <Text style={uiStyles.muted}>No available {allowChorus ? 'cantors or choruses' : 'cantors'} yet.</Text>
-      )}
-
-      {adding || !available.length ? (
+      <ContributorSearchField
+        label={allowChorus ? 'Cantor / Chorus' : 'Cantor'}
+        accountId={accountId}
+        kind="cantor"
+        allowKinds={allowChorus ? undefined : ['cantor']}
+        value={name}
+        selectedId={value}
+        placeholder={allowChorus ? 'Search an existing cantor or chorus' : 'Search an existing cantor'}
+        hint="Select an existing CHC profile to link it. If none match, type a new name."
+        onTextChange={(text) => { setName(text); onChange(''); setError(''); }}
+        onSelect={(person) => { setName(person.title); onChange(person.id); setError(''); }}
+      />
+      {!value && !!name.trim() && (
         <View style={styles.inlineCreate}>
-          {allowChorus && (
-            <View style={styles.group}>
-              <Label>Contributor type</Label>
-              <Segmented
-                items={[{ id: 'cantor', title: 'Cantor' }, { id: 'chorus', title: 'Chorus' }]}
-                value={newKind}
-                onChange={(value) => setNewKind(value as 'cantor' | 'chorus')}
-              />
-            </View>
-          )}
-          <Field
-            label={`New ${allowChorus ? newKind : 'cantor'} name`}
-            value={name}
-            onChangeText={(text) => { setName(text); setError(''); }}
-            placeholder={allowChorus && newKind === 'chorus' ? 'e.g. St. Mark Chorus' : 'e.g. Mo’allem Ibrahim Ayad'}
-            hint="This is added to CHC as soon as you press Add."
-            onSubmitEditing={() => { if (name.trim()) void create(); }}
-          />
+          <Text style={uiStyles.muted}>None of the suggestions match? Create a new profile.</Text>
           <View style={uiStyles.actions}>
-            <Button
-              kind="primary"
-              label={`Add ${allowChorus ? newKind : 'cantor'}`}
-              busy={busy}
-              disabled={!name.trim()}
-              onPress={() => void create()}
-            />
-            {available.length > 0 && (
-              <Button
-                kind="ghost"
-                label="Cancel"
-                onPress={() => { setAdding(false); setName(''); setNewKind('cantor'); setError(''); }}
-              />
-            )}
+            <Button label="Add new cantor" busy={busy} onPress={() => void create('cantor')} />
+            {allowChorus && <Button label="Add new chorus" busy={busy} onPress={() => void create('chorus')} />}
           </View>
           {!!error && <Banner tone="error">{error}</Banner>}
         </View>
-      ) : (
-        <Pressable onPress={() => setAdding(true)} hitSlop={6} style={styles.addLink}>
-          <Text style={uiStyles.link}>+ Add {allowChorus ? 'cantor / chorus' : 'cantor'}</Text>
-        </Pressable>
       )}
     </View>
   );
@@ -219,7 +184,7 @@ export default function NewSubmission() {
   if (isMusic && !draft.musicTypeOption) problems.push('Choose a music type.');
   if (isMusic && draft.musicTypeOption === 'other' && !draft.musicType.trim()) problems.push('Enter the other music type.');
   if (isMusic && !draft.recordingTypeOption) problems.push('Choose a recording type.');
-  if (isMusic && draft.releaseTimingMode === 'scheduled' && !draft.scheduledReleaseAt.trim()) problems.push('Choose a scheduled release date and time.');
+  if (draft.releaseTimingMode === 'scheduled' && !draft.scheduledReleaseAt.trim()) problems.push('Choose a scheduled release date and time.');
   if (isMusic && draft.recordingTypeOption === 'other' && !draft.recordingType.trim()) problems.push('Enter the other recording type.');
   if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
   if (draft.mode === 'learning_album' && !draft.cantorId) problems.push('Choose or add a cantor / chorus.');
@@ -293,6 +258,7 @@ export default function NewSubmission() {
           return {
             ...file,
             mainArtistName: source.mainArtistName ?? '',
+            mainArtistId: source.mainArtistId,
             contributors: (source.contributors ?? []).map((credit, index) => ({
               ...credit,
               id: `${file.id}-credit-${stamp}-${index}`,
@@ -475,13 +441,23 @@ export default function NewSubmission() {
             <LearningContributorPicker
               allowChorus={draft.mode === 'learning_album'}
               options={dashboard.cantors}
+              accountId={account?.id}
               value={draft.cantorId}
               onChange={(cantorId) => patch({ cantorId })}
             />
             <View style={styles.group}>
               <Label>Season (optional)</Label>
               {catalog.seasons.length
-                ? <Chips items={catalog.seasons} value={draft.seasonId} onChange={(seasonId) => patch({ seasonId })} />
+                ? <Dropdown
+                    label="Liturgical season"
+                    items={catalog.seasons.map((season) => ({
+                      id: season.id,
+                      title: season.titleArabic ? `${season.title} · ${season.titleArabic}` : season.title,
+                    }))}
+                    value={draft.seasonId}
+                    onChange={(seasonId) => patch({ seasonId })}
+                    placeholder="Choose a season or Other"
+                  />
                 : <Text style={uiStyles.muted}>No seasons are published yet.</Text>}
             </View>
             {draft.mode === 'learning_lesson_set' && (
@@ -492,6 +468,34 @@ export default function NewSubmission() {
                   : <Text style={uiStyles.muted}>No hymns are published yet, so lesson sets cannot be submitted.</Text>}
               </View>
             )}
+            <View style={styles.group}>
+              <Label>Release timing</Label>
+              <Segmented
+                items={[{ id: 'asap', title: 'As soon as possible' }, { id: 'scheduled', title: 'Select date & time' }]}
+                value={draft.releaseTimingMode}
+                onChange={(value) => patch({ releaseTimingMode: value as CreatorDraft['releaseTimingMode'] })}
+              />
+              <Text style={uiStyles.muted}>
+                Publish as soon as CHC approves the learning material, or schedule publication at a specific date and time.
+              </Text>
+              {draft.releaseTimingMode === 'scheduled' && (
+                <ReleaseDateTimeField
+                  label="CHC release date & time"
+                  value={draft.scheduledReleaseAt}
+                  onChange={(scheduledReleaseAt) => patch({ scheduledReleaseAt })}
+                  minimumDate={earliestReleaseChoice}
+                  hint="Uses your local time. Choose a time at least 48 hours ahead; after approval it publishes automatically."
+                />
+              )}
+              <ReleaseDateTimeField
+                label="Originally released (optional)"
+                value={draft.originalReleaseDate}
+                onChange={(originalReleaseDate) => patch({ originalReleaseDate })}
+                mode="date"
+                optional
+                hint="If these recordings or lessons were released elsewhere first, enter their original release date."
+              />
+            </View>
           </>
         )}
       </Card>
@@ -539,6 +543,7 @@ export default function NewSubmission() {
                   index={index}
                   total={draft.media.length}
                   identityName={credits?.identityArtist?.displayName ?? account?.displayName ?? ''}
+                   accountId={account?.id}
                   onCopyCreditsToAll={() => copyCreditsToAll(file.id)}
                   onChange={(change) => setDraft((current) => ({
                     ...current,
