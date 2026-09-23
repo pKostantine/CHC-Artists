@@ -14,7 +14,7 @@ function isIOSFilesPicker() {
 
 /**
  * Directly touchable file input covers the dropzone. Safari PWA must receive a
- * native input tap instead of a ref.click() on display:none after React onClick.
+ * native input tap instead of a scripted click on a hidden input.
  * Desktop drag-and-drop uses the same onFiles path.
  */
 export function FileDropZone({
