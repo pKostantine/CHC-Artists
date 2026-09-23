@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MediaPreview } from '@/components/MediaPreview';
+import { FileSelectButton } from '@/components/FileSelectButton';
 import { Banner, Button, Card, Loading, Page, PageHeader, StatusPill, uiStyles } from '@/components/ui';
 import { COLORS, RADII, SPACING } from '@/constants/theme';
 import { useWorkspace } from '@/context/WorkspaceContext';
 import { creatorService } from '@/services/creatorService';
 import type { SubmissionItem, UploadCandidate } from '@/types/creator';
 import { fileSize, shortDate, statusDescription, statusLabel, submissionTypeLabel, uploadLabel } from '@/utils/format';
-import { pickUploadCandidates, runUpload, uploadsBlocking } from '@/utils/uploads';
+import { runUpload, uploadsBlocking } from '@/utils/uploads';
 
 function itemState(item: SubmissionItem): string {
   if (item.mediaAssetId) return 'Processed';
@@ -78,11 +79,9 @@ export default function SubmissionDetail() {
       ? 'learning_album'
       : 'learning_lesson_set';
 
-  async function pick() {
-    if (!account || !submission) return;
+  function addCorrectedFiles(picked: UploadCandidate[]) {
+    if (!account || !submission || !picked.length) return;
     setError('');
-    const picked = await pickUploadCandidates(submission.submissionType === 'learning_lesson_set' ? 'lesson' : 'audio', true);
-    if (!picked.length) return;
     setAdded((current) => [...current, ...picked]);
     picked.forEach((file) => void runUpload(account.id, file, uploadMode, patchAdded));
   }
@@ -189,7 +188,13 @@ export default function SubmissionDetail() {
           description="Title and description cannot be changed after sending. Upload corrected media here, then send the submission back for review."
         >
           <View style={uiStyles.actions}>
-            <Button label={submission.submissionType === 'learning_lesson_set' ? 'Add lesson files' : 'Add audio files'} onPress={() => void pick()} />
+            <FileSelectButton
+              label={submission.submissionType === 'learning_lesson_set' ? 'Add lesson files' : 'Add audio files'}
+              kind={submission.submissionType === 'learning_lesson_set' ? 'lesson' : 'audio'}
+              multiple
+              onFiles={addCorrectedFiles}
+              onError={setError}
+            />
           </View>
 
           {added.map((file) => (
