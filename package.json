@@ -13,8 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test:submissions": "node --test tests/submissionIdentity.test.cjs",
     "test:mobile-files": "node --test tests/mobileFilePickers.test.cjs",
-    "test": "npm run test:submissions && npm run test:mobile-files && npm run test:learning-titles",
-    "test:learning-titles": "node --test tests/learningItemTitles.test.cjs"
+    "test": "npm run test:submissions && npm run test:mobile-files && npm run test:learning-titles && npm run test:artist-search",
+    "test:learning-titles": "node --test tests/learningItemTitles.test.cjs",
+    "test:artist-search": "node --test tests/unifiedArtistSearch.test.cjs"
   },
   "dependencies": {
     "@expo/ui": "57.0.18",
