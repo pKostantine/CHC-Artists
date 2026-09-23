@@ -54,63 +54,30 @@ const RECORDING_TYPE_VALUES: Record<string, string> = {
   instrumental: 'Instrumental',
 };
 
-function LearningContributorPicker({ allowChorus, options, value, onChange, accountId }: {
-  allowChorus: boolean;
-  options: CatalogOption[];
-  value: string;
-  onChange: (id: string) => void;
+/**
+ * One shared CHC artist picker for learning albums and lesson sets.
+ * Cantors and choruses are artists, not separate identities or creation types.
+ * Unselected names are resolved or created when the submission is sent.
+ */
+function LearningContributorPicker({ accountId, name, selectedArtistId, onNameChange, onSelect }: {
   accountId: string | undefined;
+  name: string;
+  selectedArtistId: string;
+  onNameChange: (name: string) => void;
+  onSelect: (artistId: string, name: string) => void;
 }) {
-  const { addPerson } = useWorkspace();
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const selected = options.find((option) => option.id === value);
-
-  useEffect(() => {
-    if (selected) setName(selected.title);
-  }, [selected?.id, selected?.title]);
-
-  async function create(kind: 'cantor' | 'chorus') {
-    if (!name.trim()) return;
-    setBusy(true);
-    setError('');
-    try {
-      const row = await addPerson(kind, name.trim());
-      onChange(row.id);
-      setName(row.title);
-    } catch (cause) {
-      setError(creatorService.describeError(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
-    <View style={styles.group}>
-      <ContributorSearchField
-        label={allowChorus ? 'Cantor / Chorus' : 'Cantor'}
-        accountId={accountId}
-        kind="cantor"
-        allowKinds={allowChorus ? undefined : ['cantor']}
-        value={name}
-        selectedId={value}
-        placeholder={allowChorus ? 'Search an existing cantor or chorus' : 'Search an existing cantor'}
-        hint="Select an existing CHC profile to link it. If none match, type a new name."
-        onTextChange={(text) => { setName(text); onChange(''); setError(''); }}
-        onSelect={(person) => { setName(person.title); onChange(person.id); setError(''); }}
-      />
-      {!value && !!name.trim() && (
-        <View style={styles.inlineCreate}>
-          <Text style={uiStyles.muted}>None of the suggestions match? Create a new profile.</Text>
-          <View style={uiStyles.actions}>
-            <Button label="Add new cantor" busy={busy} onPress={() => void create('cantor')} />
-            {allowChorus && <Button label="Add new chorus" busy={busy} onPress={() => void create('chorus')} />}
-          </View>
-          {!!error && <Banner tone="error">{error}</Banner>}
-        </View>
-      )}
-    </View>
+    <ContributorSearchField
+      label="Artist / Cantor / Chorus"
+      accountId={accountId}
+      kind="artist"
+      value={name}
+      selectedId={selectedArtistId}
+      placeholder="Search an existing CHC artist by name"
+      hint="Choose an existing profile to link it, including its photo. If no profile matches, keep your new name; CHC will create a reusable artist credit when you submit."
+      onTextChange={onNameChange}
+      onSelect={(person) => onSelect(person.id, person.title)}
+    />
   );
 }
 
@@ -210,7 +177,7 @@ function FileRow({ file, index, previewing, onPreview, onRetry, onRemove, dragHa
 }
 
 export default function NewSubmission() {
-  const { account, dashboard, catalog, draft, setDraft, resetDraft, uploadDraftFile, refresh } = useWorkspace();
+  const { account, catalog, draft, setDraft, resetDraft, uploadDraftFile, refresh } = useWorkspace();
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -250,10 +217,8 @@ export default function NewSubmission() {
   if (draft.releaseTimingMode === 'scheduled' && !draft.scheduledReleaseAt.trim()) problems.push('Choose a scheduled release date and time.');
   if (isMusic && draft.recordingTypeOption === 'other' && !draft.recordingType.trim()) problems.push('Enter the other recording type.');
   if (isMusic && credits && !credits.identityArtist) problems.push('Your artist profile is still being set up.');
-  if (draft.mode === 'learning_album' && !draft.cantorId) problems.push('Choose or add a cantor / chorus.');
-  if (draft.mode === 'learning_lesson_set' && !draft.cantorId) problems.push('Choose or add a cantor.');
-  if (draft.mode === 'learning_lesson_set' && dashboard.cantors.find((option) => option.id === draft.cantorId)?.kind === 'chorus') {
-    problems.push('Lesson sets must be taught by a cantor, not a chorus.');
+  if (!isMusic && !draft.learningArtistName.trim() && !draft.cantorId) {
+    problems.push('Enter an artist name or choose an existing CHC artist profile.');
   }
   if (draft.mode === 'learning_lesson_set' && !draft.hymnId) problems.push('Choose the hymn these lessons teach.');
   if (!draft.media.length) problems.push(`Add at least one ${draft.mode === 'learning_lesson_set' ? 'lesson' : 'audio'} file.`);
@@ -498,11 +463,11 @@ export default function NewSubmission() {
         ) : (
           <>
             <LearningContributorPicker
-              allowChorus={draft.mode === 'learning_album'}
-              options={dashboard.cantors}
               accountId={account?.id}
-              value={draft.cantorId}
-              onChange={(cantorId) => patch({ cantorId })}
+              name={draft.learningArtistName}
+              selectedArtistId={draft.cantorId}
+              onNameChange={(learningArtistName) => patch({ learningArtistName, cantorId: '' })}
+              onSelect={(cantorId, learningArtistName) => patch({ cantorId, learningArtistName })}
             />
             <View style={styles.group}>
               <Label>Season (optional)</Label>
