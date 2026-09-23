@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { FileDropZone } from '@/components/FileDropZone';
+import { FileSelectButton } from '@/components/FileSelectButton';
 import { ReleaseDateTimeField } from '@/components/ReleaseDateTimeField';
 import { ReorderableList } from '@/components/ReorderableList';
 import { TrackMetadataEditor } from '@/components/TrackMetadataEditor';
@@ -14,7 +15,7 @@ import type { CreatorRelease, CreditOptions, LocalizedMetadata, TrackContributor
 import { confirmAction } from '@/utils/dialogs';
 import { fileSize, uploadLabel } from '@/utils/format';
 import { hasMusicTitle, MUSIC_TITLE_LOCALES, preferredLocalizedTitle } from '@/utils/titles';
-import { droppedUploadCandidates, pickUploadCandidates, runUpload, uploadsBlocking } from '@/utils/uploads';
+import { droppedUploadCandidates, runUpload, uploadsBlocking } from '@/utils/uploads';
 
 interface EditableTrack {
   key: string;
@@ -174,26 +175,19 @@ export default function EditRelease() {
     }
   }
 
-  async function addTracks() {
-    if (!account) return;
-    const picked = await pickUploadCandidates('audio', true);
-    appendTracks(picked);
-  }
-
   function receiveDroppedFiles(raw: any[]) {
     setError('');
     const picked = droppedUploadCandidates(raw, 'audio');
     if (!picked.length) {
-      setError('Drop supported audio files here.');
+      setError('Choose supported audio files.');
       return;
     }
     appendTracks(picked);
   }
 
-  async function changeArtwork() {
-    if (!account) return;
-    const picked = await pickUploadCandidates('image', false);
-    if (!picked.length) return;
+  function receiveArtwork(picked: UploadCandidate[]) {
+    if (!account || !picked.length) return;
+    setError('');
     const file = picked[0];
     setCoverUpload(file);
     void runUpload(account.id, file, 'music', (id, change) => {
@@ -505,7 +499,14 @@ export default function EditRelease() {
         <FileDropZone kind="audio" onFiles={receiveDroppedFiles} />
 
         <View style={uiStyles.actions}>
-          <Button label="Add audio files" onPress={() => void addTracks()} disabled={busy || deletingRelease} />
+          <FileSelectButton
+            label="Add audio files"
+            kind="audio"
+            multiple
+            disabled={busy || deletingRelease}
+            onFiles={appendTracks}
+            onError={setError}
+          />
         </View>
 
         <View style={styles.artworkRow}>
@@ -517,10 +518,12 @@ export default function EditRelease() {
             )}
           </View>
           <View style={styles.artworkActions}>
-            <Button
+            <FileSelectButton
               label={coverUpload ? 'Choose another image' : 'Replace artwork'}
-              onPress={() => void changeArtwork()}
-              disabled={busy}
+              kind="image"
+              disabled={busy || deletingRelease}
+              onFiles={receiveArtwork}
+              onError={setError}
             />
             {!!coverUpload && (
               <>
