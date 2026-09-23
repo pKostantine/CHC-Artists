@@ -392,6 +392,24 @@ export const creatorService = {
     });
   },
 
+  /**
+   * A failed processing RPC must not make a creator re-upload a multi-GB file.
+   * Recover only an already-completed R2 upload with exactly matching original
+   * filename, size and media type, owned by the signed-in creator, and not yet
+   * used by another submission. The database enforces all of these checks.
+   */
+  async findReusableUploadedMediaIntent(accountId: string, file: UploadCandidate): Promise<string | null> {
+    if (file.mediaType !== 'video' || !file.name || !file.size) return null;
+    const { data, error } = await supabase.rpc('find_reusable_uploaded_media_intent', {
+      p_creator_account_id: accountId,
+      p_original_filename: file.name,
+      p_content_length: file.size,
+      p_media_type: file.mediaType,
+    });
+    if (error) throw new Error(describeError(error));
+    return typeof data === 'string' ? data : null;
+  },
+
   async enqueueUploadProcessing(uploadIntentId: string, mediaType: UploadCandidate['mediaType'], mode: CreatorDraft['mode']): Promise<void> {
     const jobType = mediaType === 'image'
       ? 'image_delivery'
