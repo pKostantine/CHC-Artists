@@ -29,7 +29,7 @@ export function createUploadAuth(auth: UploadAuthProvider, fetchImpl: typeof fet
     const request = (async () => {
       const { data, error } = await auth.refreshSession();
       if (error || !data.session?.access_token) {
-        throw new Error(error?.message || 'Your session expired. Sign in again to continue uploading.');
+        throw Object.assign(new Error(error?.message || 'Your session expired. Sign in again to continue uploading.'), { status: 401 });
       }
       return data.session.access_token;
     })();
@@ -47,7 +47,7 @@ export function createUploadAuth(auth: UploadAuthProvider, fetchImpl: typeof fet
 
     const { data, error } = await auth.getSession();
     if (error || !data.session?.access_token) {
-      throw new Error(error?.message || 'Your session expired. Sign in again to continue uploading.');
+      throw Object.assign(new Error(error?.message || 'Your session expired. Sign in again to continue uploading.'), { status: 401 });
     }
     const session = data.session;
     if (session.expires_at && session.expires_at * 1000 - Date.now() < REFRESH_EARLY_MS) {
