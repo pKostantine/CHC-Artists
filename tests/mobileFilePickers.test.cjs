@@ -54,3 +54,11 @@ test('Website drag and drop remains available alongside direct iPhone selection'
   assert.match(zone, /onFiles\(Array\.from\(files\)\)/);
   assert.match(zone, /multiple/);
 });
+
+test('LRC lyrics import also uses a directly tappable browser file input', () => {
+  const studio = read('src/components/LyricsStudio.tsx');
+  assert.match(studio, /Platform\.OS === 'web'/);
+  assert.match(studio, /aria-label=\{\x60Import/);
+  assert.match(studio, /void importLrc\(locale, file\)/);
+  assert.match(studio, /pickedFile \? await pickedFile\.text\(\) : await importLrcFile\(\)/);
+});
