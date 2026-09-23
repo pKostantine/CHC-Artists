@@ -110,25 +110,47 @@ export async function runUpload(
   mode: CreatorDraft['mode'],
   patch: (id: string, change: Partial<UploadCandidate>) => void,
 ): Promise<void> {
-  patch(file.id, { uploading: true, uploaded: false, uploadIntentId: undefined, error: undefined, progress: 0 });
+  // A successful R2 upload is durable even if Supabase rejected the subsequent
+  // processing RPC. Keep its intent across retries and recover previous failed
+  // uploads by exact creator/filename/size/type before transferring any bytes.
+  let uploadIntentId = file.uploadIntentId;
+  patch(file.id, {
+    uploading: true,
+    uploaded: Boolean(uploadIntentId),
+    uploadIntentId,
+    error: undefined,
+    progress: uploadIntentId ? 0.97 : 0,
+  });
+
   try {
-    const uploadIntentId = await creatorService.upload(accountId, file, (progress) => {
-      patch(file.id, { progress: Math.min(progress * 0.96, 0.96), uploading: true });
-    });
-    patch(file.id, { uploadIntentId, progress: 0.97, uploading: true });
-    // Start delivery processing as soon as the upload lands in R2. By the time
-    // the artist finishes titles/credits and submits, compatible media is often
-    // already processed. Submission creation calls the same enqueue RPC again,
-    // which is idempotent and simply reuses this job.
+    if (!uploadIntentId) {
+      uploadIntentId = (await creatorService.findReusableUploadedMediaIntent(accountId, file)) || undefined;
+      if (uploadIntentId) {
+        patch(file.id, { uploadIntentId, uploaded: true, progress: 0.97 });
+      }
+    }
+
+    if (!uploadIntentId) {
+      uploadIntentId = await creatorService.upload(accountId, file, (progress) => {
+        patch(file.id, { progress: Math.min(progress * 0.96, 0.96), uploading: true });
+      });
+      patch(file.id, { uploadIntentId, uploaded: true, progress: 0.97, uploading: true });
+    }
+
+    // Both jobs reuse the one existing R2 video; nothing is retransferred
+    // merely because an audio-only or delivery processing RPC failed.
     await creatorService.enqueueUploadProcessing(uploadIntentId, file.mediaType, mode);
     patch(file.id, { uploadIntentId, uploaded: true, uploading: false, progress: 1, error: undefined });
   } catch (error) {
+    const detail = creatorService.describeError(error);
     patch(file.id, {
       uploading: false,
-      uploaded: false,
-      uploadIntentId: undefined,
-      progress: 0,
-      error: creatorService.describeError(error),
+      uploaded: Boolean(uploadIntentId),
+      uploadIntentId,
+      progress: uploadIntentId ? 0.97 : 0,
+      error: uploadIntentId
+        ? `Original video is safely uploaded. Processing could not be started: ${detail}. Press Retry; the video will not be re-uploaded.`
+        : detail,
     });
   }
 }
