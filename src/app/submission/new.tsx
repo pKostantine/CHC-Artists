@@ -186,7 +186,12 @@ function FileRow({ file, index, previewing, onPreview, onRetry, onRemove, dragHa
       <View style={[uiStyles.row, styles.fileRow]}>
         {dragHandle}
         <View style={styles.fileText}>
-          <Text style={uiStyles.rowTitle} numberOfLines={1}>{index === undefined ? `Artwork: ${file.name}` : `${index + 1}. ${file.name}`}</Text>
+          <Text style={uiStyles.rowTitle} numberOfLines={1}>
+            {index === undefined
+              ? `Artwork: ${file.name}`
+              : `${index + 1}. ${preferredLocalizedTitle(file.localizedTitle) || file.title || 'Untitled'}`}
+          </Text>
+          {index !== undefined && <Text style={uiStyles.muted} numberOfLines={1}>{file.name}</Text>}
           <Text style={statusStyle}>{fileSize(file.size)} • {uploadLabel(file)}</Text>
           {file.uploading && (
             <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.round(file.progress * 100)}%` }]} /></View>
@@ -630,6 +635,16 @@ export default function NewSubmission() {
           {isMusic ? ` • ${inferredReleaseType.toUpperCase()}` : ''} • {draft.media.length} file{draft.media.length === 1 ? '' : 's'}
           {draft.artwork ? ' • artwork' : ''}
         </Text>
+        {draft.media.length > 0 && (
+          <View style={styles.group}>
+            <Label>{isMusic ? 'Track order and titles' : draft.mode === 'learning_album' ? 'Recording order and titles' : 'Lesson order and titles'}</Label>
+            {draft.media.map((file, index) => (
+              <Text key={file.id} style={uiStyles.muted}>
+                {index + 1}. {preferredLocalizedTitle(file.localizedTitle) || 'Title required'}
+              </Text>
+            ))}
+          </View>
+        )}
 
         {problems.length > 0 ? (
           <View style={styles.requirements}>
