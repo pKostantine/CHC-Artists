@@ -86,7 +86,11 @@ Music submissions support multiple audio files, real drag-and-drop on web, real 
 
 CHC automatically determines whether a music release is a Single, EP, or Album from its track count.
 
-Large masters use multipart upload support, and media processing begins automatically after files are uploaded rather than waiting for admin approval.
+Large masters use multipart upload support, and media processing begins automatically after files are uploaded rather than waiting for admin approval. Long uploads obtain a fresh Supabase token for each chunk and retry an individual request if its JWT expires; a token refresh does not restart an entire video.
+
+**Every lesson video is automatically standardized after upload.** The CHC media processor converts it to a fast-start H.264 MP4 (quality-based CRF 20, maximum 1080p without upscaling, 192 kbps AAC audio). It also generates a separate audio-only M4A for video lessons. There is no user-facing compression toggle; the published file is the standardized delivery version.
+
+**Upload-speed limitation:** This FFmpeg normalization currently runs after the original reaches R2. It reduces delivery size and improves playback compatibility but cannot shorten the transfer of the original file. Reliable pre-upload hardware encoding across iOS Files, Android, and Safari web requires platform-specific work; it is not implemented here, and a two-minute upload cannot be guaranteed independently of file size and upstream speed.
 
 ### Release Timing
 

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { File as ExpoFile } from 'expo-file-system';
 import { supabase } from '@/services/supabase';
+import { createUploadAuth } from '@/utils/uploadAuth';
 import { preferredLocalizedTitle, releaseTypeForTrackCount } from '@/utils/titles';
 import type {
   CatalogOption,
@@ -60,11 +61,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   heif: 'image/heif',
 };
 
-async function token(): Promise<string> {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session?.access_token) throw new Error('Your session expired. Sign in again.');
-  return data.session.access_token;
-}
+const uploadAuth = createUploadAuth(supabase.auth);
 
 /** PostgREST errors are plain objects, not Error instances. */
 function describeError(error: unknown): string {
@@ -118,12 +115,11 @@ function sleep(ms: number): Promise<void> {
 
 async function putBlob(
   url: string,
-  access: string,
   blob: Blob,
   contentType: string,
   onProgress?: (loaded: number) => void,
 ): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
+  const send = async (access: string): Promise<string> => new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
     xhr.setRequestHeader('Authorization', `Bearer ${access}`);
@@ -155,17 +151,27 @@ async function putBlob(
 
     xhr.send(blob);
   });
+
+  try {
+    return await send(await uploadAuth.getToken());
+  } catch (error) {
+    // A long multipart upload may cross the one-hour JWT lifetime.
+    // Retry this chunk only, using a newly refreshed token.
+    const status = typeof error === 'object' && error && 'status' in error
+      ? Number((error as { status?: number }).status)
+      : 0;
+    if (status !== 401) throw error;
+    return send(await uploadAuth.getToken(true));
+  }
 }
 
 async function uploadMultipart(
   uploadIntentId: string,
-  access: string,
   blob: Blob,
   onProgress: (value: number) => void,
 ): Promise<void> {
-  const create = await fetch(`${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart`, {
+  const create = await uploadAuth.authorizedFetch(`${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${access}` },
   });
   if (!create.ok) {
     if (create.status === 404 || create.status === 405) {
@@ -206,7 +212,6 @@ async function uploadMultipart(
       try {
         const responseText = await putBlob(
           endpoint,
-          access,
           chunk,
           'application/octet-stream',
           (loaded) => reportPartProgress(index, loaded),
@@ -246,12 +251,11 @@ async function uploadMultipart(
     await Promise.all(Array.from({ length: Math.min(parallel, partCount) }, () => worker()));
     onProgress(0.96);
 
-    const complete = await fetch(
+    const complete = await uploadAuth.authorizedFetch(
       `${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart/${encodeURIComponent(uploadId)}/complete`,
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${access}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ parts: completedParts }),
@@ -260,11 +264,10 @@ async function uploadMultipart(
     if (!complete.ok) throw await responseFailure(complete, 'Could not finish multipart upload');
     onProgress(1);
   } catch (error) {
-    await fetch(
+    await uploadAuth.authorizedFetch(
       `${UPLOAD_BASE}/uploads/${uploadIntentId}/multipart/${encodeURIComponent(uploadId)}`,
       {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${access}` },
       },
     ).catch(() => undefined);
     throw error;
@@ -542,7 +545,7 @@ export const creatorService = {
   },
 
   async upload(accountId: string, file: UploadCandidate, onProgress: (value: number) => void): Promise<string> {
-    const access = await token();
+    await uploadAuth.getToken();
     onProgress(0.02);
 
     // Web drag/drop and DocumentPicker give us a real File object. Keep it as a
@@ -568,10 +571,9 @@ export const creatorService = {
     const contentType = contentTypeFor(file, blob);
     onProgress(0.06);
 
-    const authorize = await fetch(`${UPLOAD_BASE}/uploads/authorize`, {
+    const authorize = await uploadAuth.authorizedFetch(`${UPLOAD_BASE}/uploads/authorize`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${access}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -591,7 +593,7 @@ export const creatorService = {
 
     if (blob.size >= MULTIPART_THRESHOLD_BYTES) {
       try {
-        await uploadMultipart(id, access, blob, onProgress);
+        await uploadMultipart(id, blob, onProgress);
       } catch (error) {
         const multipartUnavailable = typeof error === 'object' && error && 'code' in error
           && (error as { code?: string }).code === 'multipart_unavailable';
@@ -600,7 +602,6 @@ export const creatorService = {
         // Safe rollout fallback while the upload Worker deployment catches up.
         await putBlob(
           `${UPLOAD_BASE}/uploads/${id}`,
-          access,
           blob,
           contentType,
           (loaded) => onProgress(0.12 + Math.min(1, loaded / blob.size) * 0.86),
@@ -610,7 +611,6 @@ export const creatorService = {
     } else {
       await putBlob(
         `${UPLOAD_BASE}/uploads/${id}`,
-        access,
         blob,
         contentType,
         (loaded) => onProgress(0.12 + Math.min(1, loaded / blob.size) * 0.86),
