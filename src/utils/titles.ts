@@ -14,10 +14,11 @@ function withoutExtension(name: string): string {
 }
 
 function withoutTrackPrefix(value: string): string {
-  let clean = value.trim();
-  // Remove repeated leading disc/track numbering such as "1. 01 ", "02 - ", or "Track 3 ".
-  for (let i = 0; i < 3; i += 1) {
-    const next = clean.replace(/^\s*(?:track\s*)?\d{1,3}\s*(?:[._)-]\s*|[-–—]\s*|\s+)/i, '');
+  let clean = value.trim().replace(/^\s*(?:disc|disk|cd)\s*\d{1,2}\s*(?:[._)-]\s*|[-–—]\s*|\s+)/i, '');
+  // Shared by music tracks, learning recordings and individual lessons.
+  // Strip nested labels, e.g. "Disc 1 - 02. Lesson 03 - Introduction".
+  for (let i = 0; i < 4; i += 1) {
+    const next = clean.replace(/^\s*(?:(?:track|lesson|part|recording|episode)\s*)?\d{1,3}\s*(?:[._)-]\s*|[-–—]\s*|\s+)/i, '');
     if (next === clean) break;
     clean = next.trim();
   }
@@ -82,4 +83,42 @@ export function guessRecordingTypeFromFilename(filename: string): string {
   if (/\bacoustic\b/i.test(base)) return 'Acoustic';
   if (/\ba\s*cappella\b|\bacapella\b/i.test(base)) return 'A cappella';
   return '';
+}
+
+/** Numeric disc and position hint from a filename; never a required field. */
+export interface FilenameOrderHint { disc: number; position: number }
+
+/**
+ * Recognizes leading numbers ("02 - Psalm"), role labels ("Lesson 03"),
+ * disc-prefixed tracks ("Disc 2 - Track 05") and nested "1. 04" numbering.
+ * Only the filename is considered. The artist can always drag the file.
+ */
+export function guessFilenameOrder(filename: string): FilenameOrderHint | null {
+  const base = withoutExtension(filename).trim();
+  const discTrack = base.match(/^(?:disc|disk|cd)\s*0*(\d{1,2})\s*(?:[._)-]\s*|[-–—]\s*|\s+)(?:(?:track|lesson|part|recording|episode)\s*)?0*(\d{1,3})(?=$|[\s._)–—-])/i);
+  if (discTrack) return { disc: Number(discTrack[1]), position: Number(discTrack[2]) };
+  const nested = base.match(/^0*(\d{1,2})[._)]\s*0*(\d{1,3})(?=$|[\s._)–—-])/i);
+  if (nested) return { disc: Number(nested[1]), position: Number(nested[2]) };
+  const single = base.match(/^(?:(?:track|lesson|part|recording|episode)\s*)?0*(\d{1,3})(?=$|[\s._)–—-])/i);
+  return single ? { disc: 1, position: Number(single[1]) } : null;
+}
+
+/** Best-effort initial ordering. Equal/unmarked filenames retain picker order.
+ * Call only before the user manually reorders the draft.
+ */
+export function sortMediaByFilenameOrder<T extends { name: string }>(items: readonly T[]): T[] {
+  const guessed = items.map((item, selectedIndex) => ({
+    item, selectedIndex, order: guessFilenameOrder(item.name),
+  }));
+  // Don't unexpectedly move an entire album based on one ambiguous number.
+  if (guessed.filter((entry) => entry.order !== null).length < 2) return [...items];
+  guessed.sort((a, b) => {
+    if (!a.order && !b.order) return a.selectedIndex - b.selectedIndex;
+    if (!a.order) return 1;
+    if (!b.order) return -1;
+    return a.order.disc - b.order.disc
+      || a.order.position - b.order.position
+      || a.selectedIndex - b.selectedIndex;
+  });
+  return guessed.map((entry) => entry.item);
 }
