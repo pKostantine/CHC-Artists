@@ -26,8 +26,20 @@ export interface CatalogOption {
   id: string;
   title: string;
   subtitle?: string | null;
+  titleArabic?: string | null;
+  profileImage?: { bucket: string; path: string; version?: number | string | null } | null;
   /** Learning contributor kind. Existing rows without this value are cantors. */
   kind?: 'cantor' | 'chorus';
+}
+
+export interface ContributorSuggestion {
+  id: string;
+  title: string;
+  kind: 'artist' | 'cantor' | 'chorus';
+  profileImage: { bucket: string; path: string; version?: number | string | null } | null;
+  isCreditOnly?: boolean;
+  status?: string;
+  matchScore?: number;
 }
 
 export interface CreditArtist { id: string; displayName: string; isCreditOnly?: boolean }
@@ -44,6 +56,7 @@ export interface TrackContributor {
   id: string;
   name: string;
   role: TrackContributorRole;
+  artistId?: string;
 }
 
 export interface ArtistSocialLink { id?: string; platform: string; label?: string | null; url: string }
@@ -72,6 +85,7 @@ export interface ReleaseTrack {
   hasMedia: boolean;
   localizedTitle: LocalizedMetadata;
   mainArtistName: string;
+  mainArtistId?: string;
   contributors: TrackContributor[];
   mainArtist: CreditArtist | null;
   featuredArtists: CreditArtist[];
@@ -165,6 +179,7 @@ export interface UploadCandidate {
   localizedTitle?: LocalizedMetadata;
   /** Blank means the artist posting, which is the default. */
   mainArtistName?: string;
+  mainArtistId?: string;
   contributors?: TrackContributor[];
 }
 
