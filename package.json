@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test:submissions": "node --test tests/submissionIdentity.test.cjs",
     "test:mobile-files": "node --test tests/mobileFilePickers.test.cjs",
-    "test": "npm run test:submissions && npm run test:mobile-files"
+    "test": "npm run test:submissions && npm run test:mobile-files && npm run test:learning-titles",
+    "test:learning-titles": "node --test tests/learningItemTitles.test.cjs"
   },
   "dependencies": {
     "@expo/ui": "57.0.18",
