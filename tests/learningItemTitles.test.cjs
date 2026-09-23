@@ -19,6 +19,7 @@ test('music tracks, learning recordings and lessons share filename title suggest
   assert.equal(guessLocalizedTitlesFromFilename('Disc 2 - Track 05 - Vespers.wav').en, 'Vespers');
   assert.equal(guessLocalizedTitlesFromFilename('1. 01 Nisavev Teerou ♱ Liturgy.wav').en, 'Nisavev Teerou');
   assert.equal(guessLocalizedTitlesFromFilename('04 - السلام لك يا مريم.m4a').ar, 'السلام لك يا مريم');
+  assert.equal(guessLocalizedTitlesFromFilename('01.m4a').en, '');
 });
 
 test('numeric filename prefixes suggest disc and episode order', () => {
