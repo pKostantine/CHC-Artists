@@ -346,9 +346,13 @@ export const creatorService = {
       ...(draft.artwork ? [{ uploadIntentId: draft.artwork.uploadIntentId, title: draft.artwork.name, role: 'artwork' }] : []),
       ...draft.media.map((file) => ({
         uploadIntentId: file.uploadIntentId,
-        title: isMusic ? preferredLocalizedTitle(file.localizedTitle) : file.name,
+        title: preferredLocalizedTitle(file.localizedTitle)
+          || file.title?.trim()
+          || file.name.replace(/\.[^./]+$/, ''),
         role: 'media',
-        localizedTitles: isMusic ? (file.localizedTitle ?? {}) : {},
+        // Recording and lesson titles are independent of their parent title.
+        // Preserve each language through processing and scheduled publishing.
+        localizedTitles: file.localizedTitle ?? {},
         // Explicitly selected profiles stay linked by UUID. Otherwise an
         // exact normalized name reuses a credit; a new name creates one.
         mainArtistName: isMusic ? (file.mainArtistName?.trim() || null) : null,
