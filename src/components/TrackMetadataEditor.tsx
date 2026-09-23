@@ -141,10 +141,14 @@ export function TrackMetadataEditor({
   accountId,
   onChange,
   onCopyCreditsToAll,
+  kind = 'track',
+  showCredits = true,
 }: {
   value: EditableTrackMetadata;
   index: number;
   total: number;
+  kind?: 'track' | 'recording' | 'lesson';
+  showCredits?: boolean;
   identityName: string;
   accountId: string | undefined;
   onChange: (change: Partial<EditableTrackMetadata>) => void;
@@ -155,9 +159,9 @@ export function TrackMetadataEditor({
   return (
     <View style={styles.trackMetadata}>
       <View style={styles.group}>
-        <Label>{`Track ${index + 1} title`}</Label>
+        <Label>{`${kind === 'track' ? 'Track' : kind === 'recording' ? 'Recording' : 'Lesson'} ${index + 1} title`}</Label>
         <Text style={uiStyles.muted}>
-          English, Arabic, and French are optional individually; enter at least one.
+          English, Arabic, and French are optional individually; enter at least one. Filename suggestions are editable.
         </Text>
         <View style={styles.localeGrid}>
           {MUSIC_TITLE_LOCALES.map(({ key, label }) => (
@@ -176,13 +180,15 @@ export function TrackMetadataEditor({
         </View>
       </View>
 
-      <TrackCreditsEditor
-        value={value}
-        identityName={identityName}
-        accountId={accountId}
-        onChange={onChange}
-        onCopyToAll={index === 0 && total > 1 ? onCopyCreditsToAll : undefined}
-      />
+      {showCredits && (
+        <TrackCreditsEditor
+          value={value}
+          identityName={identityName}
+          accountId={accountId}
+          onChange={onChange}
+          onCopyToAll={index === 0 && total > 1 ? onCopyCreditsToAll : undefined}
+        />
+      )}
     </View>
   );
 }
