@@ -206,6 +206,8 @@ export interface CreatorDraft {
   localizedTitle: LocalizedMetadata;
   artwork?: UploadCandidate;
   media: UploadCandidate[];
+  /** Once the creator drags a file, never auto-sort subsequent additions. */
+  mediaOrderManuallySet?: boolean;
   /** Publish immediately after approval, or wait for a selected date/time. */
   releaseTimingMode: ReleaseTimingMode;
   /** Used only when releaseTimingMode is scheduled; must be at least 48 hours out. */
